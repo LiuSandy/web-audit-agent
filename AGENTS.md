@@ -21,7 +21,7 @@ uv run python -m src.cli.run-tests   # Run saved generated E2E tests
 
 ## Coding Style & Naming Conventions
 
-Use four-space indentation and follow the surrounding Python style. Ruff enforces selected `E4`, `E7`, `E9`, and `F` rules; run it before submitting changes. This Python port preserves historical hyphenated filenames such as `src/tools/broken-images.py` and public camelCase names such as `findBrokenImages`; retain those names for compatibility. Import hyphenated modules with `importlib.import_module()`. See `AGENT.md` and `MIGRATION_PLAN.md` before changing migrated interfaces.
+Use four-space indentation and follow the surrounding Python style. Ruff enforces selected `E4`, `E7`, `E9`, and `F` rules; run it before submitting changes. This Python port preserves historical hyphenated filenames such as `src/tools/broken-images.py` and public camelCase names such as `findBrokenImages`; retain those names for compatibility. Import hyphenated modules with `importlib.import_module()`. 
 
 ## Testing Guidelines
 
