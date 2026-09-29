@@ -1,0 +1,63 @@
+"""Browser session persistence matching src/auth/session-manager.ts."""
+
+from __future__ import annotations
+
+import json
+import sqlite3
+import time
+
+from playwright.async_api import Page
+
+
+class SessionManager:
+    def __init__(self, db: sqlite3.Connection) -> None:
+        self.db = db
+
+    async def saveSession(self, page: Page, appIdentifier: str) -> None:
+        context = page.context
+        cookies = await context.cookies()
+        storageState = await context.storage_state()
+        now = int(time.time() * 1000)
+        expiresAt = now + 24 * 60 * 60 * 1000
+        self.db.execute("""
+            INSERT OR REPLACE INTO browser_sessions
+            (app_identifier, cookies, storage_state, expires_at, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (
+            appIdentifier,
+            json.dumps(cookies, ensure_ascii=False, separators=(",", ":")),
+            json.dumps(storageState, ensure_ascii=False, separators=(",", ":")),
+            expiresAt, now, now,
+        ))
+
+    async def restoreSession(self, page: Page, appIdentifier: str) -> bool:
+        row = self.db.execute("""
+            SELECT cookies, storage_state, expires_at FROM browser_sessions
+            WHERE app_identifier = ? AND expires_at > ?
+        """, (appIdentifier, int(time.time() * 1000))).fetchone()
+        if row is None:
+            return False
+
+        try:
+            context = page.context
+            cookies = json.loads(row["cookies"])
+            await context.add_cookies(cookies)
+            if row["storage_state"]:
+                state = json.loads(row["storage_state"])
+                if state.get("origins"):
+                    await page.evaluate("""(origins) => {
+                        for (const origin of origins) {
+                            if (origin.origin === window.location.origin) {
+                                for (const item of origin.localStorage) {
+                                    localStorage.setItem(item.name, item.value);
+                                }
+                            }
+                        }
+                    }""", state["origins"])
+            return True
+        except Exception as error:  # noqa: BLE001 - preserve source catch
+            print("恢复会话失败：", error)
+            return False
+
+    def close(self) -> None:
+        self.db.close()
