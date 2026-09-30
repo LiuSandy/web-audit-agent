@@ -9,6 +9,7 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langsmith import traceable
 from playwright.async_api import async_playwright
 
 from src.database.database import AppDatabase
@@ -32,6 +33,12 @@ TestGenerator = importlib.import_module("src.services.test-generator").TestGener
 TestExecutor = importlib.import_module("src.services.test-executor").TestExecutor
 
 logger = createLogger("agent:exploratory")
+
+
+def buildStepMetadata(sessionId, state, url):
+    """Builds LangSmith metadata describing one agent step."""
+    return {"sessionId": sessionId or "", "step": state["steps"], "url": url,
+            "visitedCount": len(state["visitedUrls"]), "queueLength": len(state["todoQueue"])}
 
 _SNAPSHOT_CALLBACK = r'''
 (visitedUrls) => {
@@ -199,8 +206,13 @@ class ExploratoryAgent:
             raise RuntimeError("测试代理尚未启动")
         self.state["steps"] += 1
         url = self.page.url
-        title = await self.page.title()
         self.state["visitedUrls"].add(url)
+        metadata = buildStepMetadata(self.config.get("sessionId"), self.state, url)
+        return await self._step(guidance, url, langsmith_extra={"metadata": metadata})
+
+    @traceable(name="agent.step", run_type="chain")
+    async def _step(self, guidance=None, url=None):
+        title = await self.page.title()
         visitedList = list(self.state["visitedUrls"])
         snapshot = await self.page.evaluate(_SNAPSHOT_CALLBACK, visitedList)
         history = self.state["history"]
@@ -279,6 +291,7 @@ class ExploratoryAgent:
         return {"action": parsed["action"], "reason": parsed["reason"],
                 "completed": parsed["action"] == "finish", "stats": stats}
 
+    @traceable(name="execute_action", run_type="tool")
     async def executeAction(self, action, params):
         if not self.page:
             return None
@@ -351,6 +364,7 @@ class ExploratoryAgent:
             if action in ("navigate", "click", "fill_form"):
                 await self.performAutomaticBugScanning()
 
+    @traceable(name="automatic_bug_scanning", run_type="tool")
     async def performAutomaticBugScanning(self):
         if not self.page:
             return
@@ -414,6 +428,7 @@ class ExploratoryAgent:
     def getVisitedUrls(self):
         return list(self.state["visitedUrls"])
 
+    @traceable(name="agent.generate_tests", run_type="chain")
     async def generateTests(self):
         if not self.testGenerator:
             logger.warn("未启用测试生成")

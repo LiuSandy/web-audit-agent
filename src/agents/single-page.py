@@ -6,6 +6,7 @@ import os
 import time
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langsmith import traceable
 from playwright.async_api import async_playwright
 
 from src.database.database import AppDatabase
@@ -54,6 +55,7 @@ class SinglePageTestingAgent:
     def getState(self):
         return dict(self.state)
 
+    @traceable(name="single_page_test", run_type="chain")
     async def start(self):
         logger.info(f"正在开始单页测试：{self.config['targetUrl']}")
         try:
@@ -147,6 +149,7 @@ class SinglePageTestingAgent:
         logger.info(f"已发现 {len(el)} 个页面元素")
         return el
 
+    @traceable(name="single_page.plan", run_type="chain")
     async def generateTestPlan(self, elements):
         url = self.page.url
         title = await self.page.title()
@@ -212,6 +215,7 @@ class SinglePageTestingAgent:
                              "inputs": len(inputs), "otherInteractive": len([e for e in all if e["tag"] not in ("input", "textarea", "select", "button", "a")])},
                 "testCases": cases}
 
+    @traceable(name="single_page.test_case", run_type="tool")
     async def executeTestCase(self, tc):
         if not pageOk(self.page):
             return {"testCaseId": tc["id"], "status": "error", "executionTimeMs": 0,
