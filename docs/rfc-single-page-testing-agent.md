@@ -1,6 +1,6 @@
 # RFC：采用规划—执行架构的单页测试代理
 
-> 历史 TypeScript RFC 的中文整理版。当前 Python 实现见 `src/agents/single-page.py`；本文是设计背景，具体行为以代码为准。
+> 历史设计文档。当前实现见 `src/agents/single-page.py`；本文是设计背景，具体行为以代码为准。
 
 **状态：**草案  
 **作者：**Crisler Wintler  

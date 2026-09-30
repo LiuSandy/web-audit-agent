@@ -1,4 +1,4 @@
-"""Port of src/index.ts CLI flow."""
+"""WebAudit interactive CLI entry."""
 
 import asyncio
 import importlib

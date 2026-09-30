@@ -1,4 +1,4 @@
-"""Port of src/utils/helpers.ts for DOM-compatible element objects."""
+"""Shared helpers for DOM snapshots and page utilities."""
 
 import re
 

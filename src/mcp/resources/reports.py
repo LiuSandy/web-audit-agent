@@ -1,4 +1,4 @@
-"""Port of src/mcp/resources/reports.ts."""
+"""MCP resource for reading generated reports."""
 
 from pathlib import Path
 

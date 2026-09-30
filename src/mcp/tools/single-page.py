@@ -1,4 +1,4 @@
-"""Port of src/mcp/tools/single-page.ts."""
+"""MCP tool for single-page test runs."""
 
 import asyncio
 import importlib

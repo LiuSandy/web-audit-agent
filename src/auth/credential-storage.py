@@ -1,4 +1,4 @@
-"""AES-256-CBC credential storage compatible with the TypeScript rows."""
+"""AES-256-CBC encrypted credential storage in SQLite."""
 
 from __future__ import annotations
 

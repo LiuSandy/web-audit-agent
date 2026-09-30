@@ -1,4 +1,4 @@
-"""Port of src/agents/single-page.ts."""
+"""Single-page testing agent with a plan-and-execute flow."""
 
 import importlib
 import json

@@ -1,5 +1,5 @@
 #!/bin/bash
-# Deploy the Python MCP server wrapper at the same path as the TypeScript project.
+# Deploy the MCP server wrapper script.
 
 set -euo pipefail
 

@@ -1,4 +1,4 @@
-"""Port of src/utils/report.ts; keeps report text and failure behavior."""
+"""Generates Markdown exploration and test reports."""
 
 from __future__ import annotations
 

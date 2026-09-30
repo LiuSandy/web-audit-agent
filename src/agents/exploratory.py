@@ -1,4 +1,4 @@
-"""Port of src/agents/exploratory.ts."""
+"""LLM-driven exploratory testing agent."""
 
 import asyncio
 import importlib

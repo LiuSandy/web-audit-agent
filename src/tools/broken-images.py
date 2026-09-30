@@ -1,4 +1,4 @@
-"""Port of src/tools/broken-images.ts."""
+"""Broken image detection for a page."""
 
 from playwright.async_api import Page
 

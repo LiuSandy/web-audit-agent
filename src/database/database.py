@@ -1,4 +1,4 @@
-"""SQLite schema and singleton behavior of src/database/database.ts."""
+"""SQLite schema and singleton database access."""
 
 from __future__ import annotations
 

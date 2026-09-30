@@ -1,4 +1,4 @@
-"""Port of src/tools/crawler.ts."""
+"""Same-domain link discovery that builds the visit queue."""
 
 from __future__ import annotations
 

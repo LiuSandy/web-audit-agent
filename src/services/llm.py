@@ -1,4 +1,4 @@
-"""Port of src/services/llm.ts."""
+"""LLM model factory for Gemini and OpenAI-compatible providers."""
 
 import os
 

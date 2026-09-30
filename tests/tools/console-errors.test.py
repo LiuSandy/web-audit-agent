@@ -1,4 +1,4 @@
-"""Port of tests/tools/console-errors.test.ts."""
+"""Tests for console error monitoring."""
 
 import importlib
 

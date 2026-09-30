@@ -1,6 +1,6 @@
 # 单页测试代理：规划—执行功能需求
 
-> 这是历史 TypeScript 需求的中文整理版，保留原文件名。当前 Python 实现见 `src/agents/single-page.py`；迁移路径见 `MIGRATION_PLAN.md`。以下任务和验收条件描述原提案，不能据此推断当前代码已全部实现。
+> 历史设计文档。当前实现见 `src/agents/single-page.py`。以下任务和验收条件描述初始提案，不能据此推断当前代码已全部实现。
 
 ## 概要与动机
 

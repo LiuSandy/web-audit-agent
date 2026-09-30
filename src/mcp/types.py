@@ -1,4 +1,4 @@
-"""Port of src/mcp/types.ts, retaining exported names and response format."""
+"""MCP tool result types and text-content helpers."""
 
 import json
 from typing import Any, NotRequired, TypedDict

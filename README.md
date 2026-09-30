@@ -70,7 +70,7 @@ uv run pytest
 uv run ruff check src tests
 ~~~
 
-`pyproject.toml` 定义 pytest 的 `*.test.py` 和 `*_spec.py` 发现规则；异步浏览器测试需要 Chromium。生成的测试位于 `generated-tests/<category>/`，使用 pytest 与 Python Playwright，不需要 Bun 或 Node。
+`pyproject.toml` 定义 pytest 的 `*.test.py` 和 `*_spec.py` 发现规则；异步浏览器测试需要 Chromium。生成的测试位于 `generated-tests/<category>/`，使用 pytest 与 Python Playwright 运行。
 
 ## 设计说明
 

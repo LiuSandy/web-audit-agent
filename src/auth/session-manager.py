@@ -1,4 +1,4 @@
-"""Browser session persistence matching src/auth/session-manager.ts."""
+"""Browser session persistence."""
 
 from __future__ import annotations
 

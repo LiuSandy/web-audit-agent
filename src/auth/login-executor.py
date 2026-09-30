@@ -1,4 +1,4 @@
-"""Port of src/auth/login-executor.ts."""
+"""Executes login flows on target pages."""
 
 import importlib
 import re

@@ -1,4 +1,4 @@
-"""Port of src/mcp/server.ts using the Python MCP stdio server."""
+"""MCP stdio server exposing WebAudit tools and resources."""
 
 import importlib
 

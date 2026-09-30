@@ -1,4 +1,4 @@
-"""Port of src/mcp/tools/exploratory.ts."""
+"""MCP tools for exploratory test runs."""
 
 import asyncio
 import importlib

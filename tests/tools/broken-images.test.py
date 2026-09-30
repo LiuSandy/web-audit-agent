@@ -1,4 +1,4 @@
-"""Port of tests/tools/broken-images.test.ts."""
+"""Tests for broken image detection."""
 
 import importlib
 

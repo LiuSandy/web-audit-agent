@@ -1,4 +1,4 @@
-"""Port of src/tools/validation-errors.ts."""
+"""Visible form validation message detection."""
 
 from typing import TypedDict
 

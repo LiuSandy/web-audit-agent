@@ -1,4 +1,4 @@
-"""TypeScript interfaces from src/types/index.ts, with original field names."""
+"""Shared data structures for agents, tools, and services."""
 
 from __future__ import annotations
 

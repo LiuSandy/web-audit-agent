@@ -1,4 +1,4 @@
-"""Port of src/tools/visual-regression.ts."""
+"""Visual regression check between page screenshots."""
 
 import hashlib
 import re

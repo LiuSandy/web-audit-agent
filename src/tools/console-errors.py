@@ -1,4 +1,4 @@
-"""Port of src/tools/console-errors.ts."""
+"""Console error monitoring for a page."""
 
 from __future__ import annotations
 

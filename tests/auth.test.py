@@ -1,4 +1,4 @@
-"""Port of tests/auth.test.ts."""
+"""Tests for the auth modules."""
 
 import importlib
 import threading

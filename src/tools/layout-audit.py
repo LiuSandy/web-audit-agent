@@ -1,4 +1,4 @@
-"""Port of src/tools/layout-audit.ts. DOM heuristics run in the browser."""
+"""Layout audit for a page; DOM heuristics run in the browser."""
 
 import importlib
 

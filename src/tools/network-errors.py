@@ -1,4 +1,4 @@
-"""Port of src/tools/network-errors.ts."""
+"""Failed network request monitoring for a page."""
 
 from __future__ import annotations
 

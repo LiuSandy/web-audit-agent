@@ -1,4 +1,4 @@
-"""Persistence format compatible with SessionRepository in TypeScript."""
+"""SQLite-backed persistence for exploration sessions."""
 
 from __future__ import annotations
 

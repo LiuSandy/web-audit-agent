@@ -1,4 +1,4 @@
-"""Port of src/auth/auth-manager.ts."""
+"""Coordinates login detection, execution, and session handling."""
 
 import importlib
 

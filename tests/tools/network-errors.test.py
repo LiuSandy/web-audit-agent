@@ -1,4 +1,4 @@
-"""Port of tests/tools/network-errors.test.ts."""
+"""Tests for network error monitoring."""
 
 import importlib
 

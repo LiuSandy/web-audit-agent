@@ -1,4 +1,4 @@
-"""Port of src/mcp/index.ts."""
+"""MCP stdio server entry point."""
 
 import asyncio
 import signal

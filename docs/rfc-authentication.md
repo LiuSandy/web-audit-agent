@@ -1,6 +1,6 @@
 # RFC：面向网站测试的认证与凭据管理
 
-> 历史 TypeScript RFC 的中文整理版，保留原文件名。当前 Python 认证实现位于 `src/auth/`，路径对应关系见 `MIGRATION_PLAN.md`。本文描述原提案；计划中的 OAuth、SSO 或其他能力不能视为已实现。
+> 历史设计文档。当前认证实现位于 `src/auth/`。本文描述初始提案；计划中的 OAuth、SSO 或其他能力不能视为已实现。
 
 **状态：**草案  
 **作者：**Crisler Wintler  

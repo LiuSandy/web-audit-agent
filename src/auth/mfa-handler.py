@@ -1,4 +1,4 @@
-"""Port of src/auth/mfa-handler.ts."""
+"""TOTP multi-factor authentication code handling."""
 
 import pyotp
 from playwright.async_api import Page

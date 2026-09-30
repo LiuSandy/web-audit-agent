@@ -1,4 +1,4 @@
-"""Port of src/mcp/tools/sessions.ts."""
+"""MCP tool for listing saved sessions."""
 
 import importlib
 import importlib.util

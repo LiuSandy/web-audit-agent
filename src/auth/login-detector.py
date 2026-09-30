@@ -1,4 +1,4 @@
-"""Port of src/auth/login-detector.ts."""
+"""Detects login forms on a page."""
 
 from urllib.parse import urlparse
 

@@ -1,4 +1,4 @@
-"""Port of src/tools/screenshot.ts."""
+"""Full-page and element screenshot capture."""
 
 import re
 import time

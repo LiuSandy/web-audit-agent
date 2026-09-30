@@ -1,4 +1,4 @@
-"""Port of src/mcp/tools/status.ts."""
+"""MCP tools for test status and stopping runs."""
 
 import importlib
 from datetime import datetime, timezone

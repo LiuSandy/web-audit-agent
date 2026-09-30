@@ -1,4 +1,4 @@
-"""Port of src/auth/credential-provider.ts."""
+"""Loads stored credentials for authenticated sessions."""
 
 from __future__ import annotations
 

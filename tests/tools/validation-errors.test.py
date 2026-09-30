@@ -1,4 +1,4 @@
-"""Port of tests/tools/validation-errors.test.ts."""
+"""Tests for form validation error detection."""
 
 import importlib
 import math
