@@ -1,6 +1,7 @@
 """WebAudit CLI 层的测试（ROADMAP #3）。"""
 import asyncio
 import io
+import json as json_module
 
 import pytest
 from rich.console import Console
@@ -177,3 +178,68 @@ async def test_finish_session_swallows_test_generation_failure(monkeypatch):
     agent.generate_tests = failing_generate_tests
     report_path, generated = await finish_session(agent, {"sessionId": "s", "baseUrl": "b"}, True)
     assert report_path == "reports/fake.md" and generated is None
+
+
+@pytest.fixture
+def fake_run_env(monkeypatch):
+    """替换 run 命令的 agent 与报告生成，返回 (agent, report_calls)。"""
+    import src.cli.commands.run as run_module
+    from src.cli.core import runner as runner_module
+
+    agent = FakeAgent(steps=[STEP_A, STEP_B])
+    report_calls = []
+
+    async def fake_report(findings, visited, session_id, base_url):
+        report_calls.append({"sessionId": session_id, "baseUrl": base_url})
+        return "reports/fake.md"
+
+    monkeypatch.setattr(run_module, "ExploratoryAgent", lambda config: agent)
+    monkeypatch.setattr(runner_module, "generate_report", fake_report)
+    return agent, report_calls
+
+
+def test_run_success_exit_zero(fake_run_env):
+    agent, _ = fake_run_env
+    result = runner.invoke(app, ["run", "https://example.com"])
+    assert result.exit_code == 0
+    assert agent.started and agent.stopped
+
+
+def test_run_json_stdout_pure(fake_run_env):
+    agent, _ = fake_run_env
+    result = runner.invoke(app, ["run", "https://example.com", "--json"])
+    assert result.exit_code == 0
+    payload = json_module.loads(result.stdout)
+    assert payload["sessionId"].startswith("session-")
+    assert payload["reportPath"] == "reports/fake.md"
+    assert payload["steps"] == 2
+    assert payload["findingsCount"] == len(agent.findings)
+    assert "步骤" not in result.stdout
+
+
+def test_run_agent_failure_exit_one(monkeypatch):
+    import src.cli.commands.run as run_module
+
+    agent = FakeAgent(error=RuntimeError("浏览器启动失败"))
+    monkeypatch.setattr(run_module, "ExploratoryAgent", lambda config: agent)
+    result = runner.invoke(app, ["run", "https://example.com"])
+    assert result.exit_code == 1
+
+
+def test_run_cancelled_saves_report_and_exits_130(fake_run_env):
+    agent, report_calls = fake_run_env
+    agent.cancelled_during = 1
+    result = runner.invoke(app, ["run", "https://example.com"])
+    assert result.exit_code == 130
+    assert len(report_calls) == 1
+    assert agent.stopped
+
+
+def test_run_rejects_incomplete_auth(fake_run_env):
+    result = runner.invoke(app, ["run", "https://example.com", "--auth-email", "a@b.c"])
+    assert result.exit_code == 2
+
+
+def test_run_rejects_unknown_test_mode(fake_run_env):
+    result = runner.invoke(app, ["run", "https://example.com", "--test-mode", "bogus"])
+    assert result.exit_code == 2

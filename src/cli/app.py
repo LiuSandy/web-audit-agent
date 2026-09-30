@@ -3,6 +3,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 import typer
 
+from src.cli.commands.run import run_command
 from src.cli.core.exits import OK
 
 try:
@@ -11,6 +12,8 @@ except PackageNotFoundError:
     __version__ = "0.1.0"
 
 app = typer.Typer(help="WebAudit —— 网站探索测试代理")
+
+app.command("run")(run_command)
 
 
 @app.callback(invoke_without_command=True)
