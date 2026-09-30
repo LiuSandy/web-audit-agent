@@ -74,7 +74,7 @@ def wrapText(str, maxWidth=80):
 
 async def main():
     print("✨ 欢迎使用网站探索测试工具 ✨")
-    defaultUrl = "https://with-bugs.practicesoftwaretesting.com"
+    defaultUrl = "https://www.lius-node.com"
     baseUrl = await _text("请输入目标网站地址：", defaultUrl)
     isAutonomous = await _confirm("启用自主模式？（每一步无需人工确认）")
     isVerbose = await _confirm("显示详细日志？（包含工具输出）")
