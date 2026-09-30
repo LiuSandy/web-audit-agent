@@ -3,8 +3,9 @@
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
-from src.cli import run_tests as runner
+from src.cli.app import app
 from src.services.test_executor import TestExecutor as ExecutorClass
 from src.services.test_generator import TestGenerator as GeneratorClass
 
@@ -58,7 +59,8 @@ def test_home_page(page):
     assert Path(tests[0]["filePath"]).is_file()
     results = await executor.execute_tests(tests)
     assert results[0]["success"], results[0]["output"]
-    runner.run_all_tests()
+    result = CliRunner().invoke(app, ["test"])
+    assert result.exit_code == 0
 
 
 def test_generator_rejects_non_python_or_uncollectable_output():

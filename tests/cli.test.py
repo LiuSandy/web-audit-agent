@@ -328,3 +328,22 @@ def test_derive_base_url_takes_first_valid_origin():
     findings = [{"url": "not-a-url"}, {"url": "https://a.com/x?y=1"}, {"url": "https://b.com/"}]
     assert derive_base_url(findings) == "https://a.com"
     assert derive_base_url([]) is None
+
+
+def test_test_command_missing_dir_exits_one(tmp_path):
+    result = runner.invoke(app, ["test", str(tmp_path / "nope")])
+    assert result.exit_code == 1
+    assert "未找到生成的测试" in result.output
+
+
+def test_test_command_propagates_pytest_exit_code(tmp_path):
+    (tmp_path / "demo_spec.py").write_text("def test_ok():\n    assert True\n", encoding="utf-8")
+    result = runner.invoke(app, ["test", str(tmp_path)])
+    assert result.exit_code == 0
+    assert "所有测试均已通过" in result.output
+
+
+def test_test_command_propagates_failure_exit_code(tmp_path):
+    (tmp_path / "bad_spec.py").write_text("def test_bad():\n    assert False\n", encoding="utf-8")
+    result = runner.invoke(app, ["test", str(tmp_path)])
+    assert result.exit_code != 0

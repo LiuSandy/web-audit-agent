@@ -16,7 +16,7 @@ uv run python -m src.index           # Run the interactive agent
 uv run python -m src.mcp.index       # Run the MCP stdio server
 uv run pytest                        # Run handwritten tests
 uv run ruff check src tests          # Check configured lint rules
-uv run python -m src.cli.run_tests   # Run saved generated E2E tests
+uv run python -m src.index test      # Run saved generated E2E tests
 ```
 
 ## Coding Style & Naming Conventions
