@@ -243,3 +243,88 @@ def test_run_rejects_incomplete_auth(fake_run_env):
 def test_run_rejects_unknown_test_mode(fake_run_env):
     result = runner.invoke(app, ["run", "https://example.com", "--test-mode", "bogus"])
     assert result.exit_code == 2
+
+
+@pytest.fixture
+def fake_repo(monkeypatch):
+    import src.cli.commands.report as report_module
+
+    class FakeRepo:
+        def __init__(self, db):
+            self.db = db
+
+        def list_sessions(self):
+            return ["session-1", "session-2"]
+
+        def load_state(self, session_id):
+            if session_id == "session-1":
+                return {"findings": [{"type": "console_error", "severity": "medium",
+                                      "url": "https://example.com/a", "description": "d"}],
+                        "visitedUrls": {"https://example.com/"}, "steps": 3}
+            return {"findings": [], "visitedUrls": [], "steps": 1}
+
+    class FakeDB:
+        @classmethod
+        def get_instance(cls):
+            return cls()
+
+        def get_database(self):
+            return object()
+
+    monkeypatch.setattr(report_module, "AppDatabase", FakeDB)
+    monkeypatch.setattr(report_module, "SessionRepository", FakeRepo)
+    return report_module
+
+
+def test_report_list_sessions(fake_repo):
+    result = runner.invoke(app, ["report", "--list"])
+    assert result.exit_code == 0 and "session-1" in result.output and "session-2" in result.output
+
+
+def test_report_regenerates_from_state_and_derives_base_url(fake_repo, monkeypatch):
+    calls = []
+
+    async def fake_report(findings, visited, session_id, base_url):
+        calls.append(base_url)
+        return "reports/r.md"
+
+    monkeypatch.setattr(fake_repo, "generate_report", fake_report)
+    result = runner.invoke(app, ["report", "session-1"])
+    assert result.exit_code == 0
+    assert "reports/r.md" in result.output
+    assert calls == ["https://example.com"]
+
+
+def test_report_requires_base_url_when_not_derivable(fake_repo):
+    result = runner.invoke(app, ["report", "session-2"])
+    assert result.exit_code == 2
+
+
+def test_report_accepts_explicit_base_url(fake_repo, monkeypatch):
+    calls = []
+
+    async def fake_report(findings, visited, session_id, base_url):
+        calls.append(base_url)
+        return "reports/r2.md"
+
+    monkeypatch.setattr(fake_repo, "generate_report", fake_report)
+    result = runner.invoke(app, ["report", "session-2", "--base-url", "https://other.com"])
+    assert result.exit_code == 0 and calls == ["https://other.com"]
+
+
+def test_report_unknown_session_is_usage_error(fake_repo):
+    result = runner.invoke(app, ["report", "nope"])
+    assert result.exit_code == 2
+
+
+def test_report_missing_arg_is_usage_error(fake_repo):
+    result = runner.invoke(app, ["report"])
+    assert result.exit_code == 2
+
+
+def test_derive_base_url_takes_first_valid_origin():
+    from src.cli.commands.report import derive_base_url
+
+    findings = [{"url": "not-a-url"}, {"url": "https://a.com/x?y=1"}, {"url": "https://b.com/"}]
+    assert derive_base_url(findings) == "https://a.com"
+    assert derive_base_url([]) is None
