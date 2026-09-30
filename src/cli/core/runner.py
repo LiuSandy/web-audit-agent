@@ -10,21 +10,27 @@ class StopExploration(Exception):
     """由指导回调抛出，表示用户要求提前结束探索。"""
 
 
-async def explore(agent, get_guidance=None, pause: float = 1.0) -> AsyncIterator[dict]:
+async def explore(agent, get_guidance=None, pause: float = 1.0, max_steps: int | None = None) -> AsyncIterator[dict]:
     """驱动 agent 步循环，逐步 yield 结果。
 
     get_guidance：每步（未完成）后调用的异步回调；返回下一步指导文本或 None 继续循环，
     抛 StopExploration 提前结束。为 None 时按自主模式在步间 sleep(pause)。
+    max_steps：步数上限；falsy（None/0）表示不限，与 render_step 的约定一致。
     生命周期：进入时 start()，退出（含异常/取消）时在 finally 中 stop()。
     """
     await agent.start()
     try:
         next_guidance = None
+        step_count = 0
         while True:
             result = await agent.step(next_guidance)
             next_guidance = None
+            step_count += 1
             yield result
             if result["completed"]:
+                return
+            # falsy（None/0）表示不设上限，与 render_step 的 max_steps 约定一致
+            if max_steps and step_count >= max_steps:
                 return
             if get_guidance is None:
                 await asyncio.sleep(pause)

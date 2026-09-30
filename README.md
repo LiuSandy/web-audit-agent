@@ -61,7 +61,7 @@ uv run python -m src.index mcp
 uv build && uv tool install dist/*.whl && webaudit --version
 ```
 
-交互向导（无子命令时的默认入口）按提示输入目标网址、选择自主或人工引导模式、决定是否生成测试，并选择新建或恢复会话。结束后，探索报告写入 `reports/report-<session-id>.md`。
+运行交互向导（无子命令时的默认入口），按提示输入目标网址、选择自主或人工引导模式、决定是否生成测试，并选择新建或恢复会话。结束后，探索报告写入 `reports/report-<session-id>.md`。
 
 MCP 客户端配置、工具和资源见 [MCP 服务说明](docs/mcp-server.md)。`scripts/deploy-mcp.sh` 可创建指向同一 Python 入口的包装脚本。
 

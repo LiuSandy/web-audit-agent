@@ -371,3 +371,30 @@ def test_mcp_command_delegates_to_mcp_entry(monkeypatch):
     result = runner.invoke(app, ["mcp"])
     assert result.exit_code == 0
     assert called == [True]
+
+
+@pytest.mark.asyncio
+async def test_explore_respects_max_steps():
+    agent = FakeAgent(steps=[STEP_A, STEP_A, STEP_A])
+    results = [result async for result in explore(agent, pause=0, max_steps=2)]
+    assert len(results) == 2
+    assert agent.stopped
+
+
+def test_run_respects_max_steps(fake_run_env):
+    agent, _ = fake_run_env
+    result = runner.invoke(app, ["run", "https://example.com", "--max-steps", "1", "--json"])
+    assert result.exit_code == 0
+    payload = json_module.loads(result.stdout)
+    assert payload["steps"] == 1
+    assert payload["reportPath"] == "reports/fake.md"
+
+
+def test_render_step_escapes_rich_markup_in_current_url():
+    out = _capture_console()
+    result = {"action": "navigate", "reason": "r",
+              "stats": {"currentUrl": "https://x/[/x]", "queueLength": 0, "visitedCount": 0,
+                        "findingsCount": 0}}
+    render_step(1, result, 0, out)
+    text = out.file.getvalue()
+    assert "https://x/[/x]" in text

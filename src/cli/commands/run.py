@@ -4,6 +4,7 @@ import json
 import time
 
 import typer
+from rich.markup import escape
 
 from src.agents.exploratory import ExploratoryAgent
 from src.cli.core.config import RunOptions, build_config, validate_auth
@@ -20,18 +21,18 @@ async def _execute(options: RunOptions) -> int:
     out = diagnostics if options.json_output else console
     try:
         step_index = 0
-        async for result in explore(agent):
+        async for result in explore(agent, max_steps=options.max_steps):
             step_index += 1
             render_step(step_index, result, options.max_steps, out)
         report_path, generated = await finish_session(agent, config, options.generate_tests)
     except asyncio.CancelledError:
         try:
             await finish_session(agent, config, False)
-        except Exception:
-            pass
+        except Exception as error:
+            diagnostics.print(f"[yellow]取消时保存报告失败：{error}[/yellow]")
         return INTERRUPTED
     except Exception as error:
-        out.print(f"[red]运行失败：{friendly_hint(error)}[/red]")
+        out.print(f"[red]运行失败：{escape(friendly_hint(error))}[/red]")
         return RUN_FAILED
     duration_ms = int((time.monotonic() - started) * 1000)
     findings = agent.get_findings()

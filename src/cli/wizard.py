@@ -3,6 +3,7 @@ import asyncio
 from pathlib import Path
 
 import questionary
+from rich.markup import escape
 from rich.panel import Panel
 
 from src.agents.exploratory import ExploratoryAgent
@@ -127,7 +128,10 @@ def _make_guidance_menu(agent, options: RunOptions):
         if answer == "stop":
             raise StopExploration()
         if answer == "guidance":
-            return await _text("请输入下一步的指导：")
+            try:
+                return await _text("请输入下一步的指导：")
+            except WizardCancelled:
+                return None
         if answer == "generate-tests":
             await _generate_and_summarize(agent)
             return None
@@ -161,21 +165,27 @@ async def run_wizard() -> int:
         console.print("正在启动测试代理和浏览器……")
         async for result in explore(agent, _make_guidance_menu(agent, options)):
             step_index += 1
-            render_step(step_index, result, options.max_steps, console)
-            console.print(f"原因：{result.get('reason', '')}")
+            render_step(step_index, result, 0, console)
+            console.print(f"原因：{escape(result.get('reason', ''))}")
         console.print("测试代理已结束探索。正在生成报告……")
         report_path, generated = await finish_session(agent, config, options.generate_tests)
         _show_epilogue(agent, report_path, generated)
     except WizardCancelled:
         # 步间菜单取消：先存已收集的发现（对齐旧 main 的 answer is None 分支）
-        report_path, generated = await finish_session(agent, config, options.generate_tests)
+        try:
+            report_path, generated = await finish_session(agent, config, options.generate_tests)
+        except Exception as error:
+            diagnostics.print(f"[yellow]取消时保存报告失败：{error}[/yellow]")
+            diagnostics.print(f"[red]严重错误：{friendly_hint(error)}[/red]")
+            return RUN_FAILED
         _show_epilogue(agent, report_path, generated)
     except asyncio.CancelledError:
+        console.print("⚠️ 用户已取消，正在保存报告……")
         try:
             report_path, _generated = await finish_session(agent, config, False)
             _show_epilogue(agent, report_path, None)
-        except Exception:
-            pass
+        except Exception as error:
+            diagnostics.print(f"[yellow]取消时保存报告失败：{error}[/yellow]")
         return INTERRUPTED
     except Exception as error:
         diagnostics.print(f"[red]严重错误：{friendly_hint(error)}[/red]")

@@ -1,5 +1,6 @@
 """rich 输出分层（spec §7）：进度层/结果层走 Console 参数，诊断层固定 stderr。"""
 from rich.console import Console
+from rich.markup import escape
 from rich.table import Table
 
 from src.utils.locale import ACTIONS, SEVERITIES, display_label
@@ -17,7 +18,7 @@ def render_step(step_index: int, result: dict, max_steps: int, out: Console) -> 
     out.print(
         f"[bold cyan]步骤 {step_index}{total}[/bold cyan] "
         f"{display_label(result.get('action', ''), ACTIONS)} · "
-        f"当前 {stats.get('currentUrl', '未知')} · 队列 {stats.get('queueLength', 0)} · "
+        f"当前 {escape(stats.get('currentUrl', '未知'))} · 队列 {stats.get('queueLength', 0)} · "
         f"已访问 {stats.get('visitedCount', 0)} · 发现 {stats.get('findingsCount', 0)}"
     )
 
@@ -31,8 +32,8 @@ def findings_table(findings: list[dict], out: Console) -> None:
     table.add_column("页面")
     for finding in findings:
         severity = finding.get("severity", "")
-        table.add_row(finding.get("type", ""), display_label(severity, SEVERITIES),
-                      finding.get("description", ""), finding.get("url", ""),
+        table.add_row(escape(finding.get("type", "")), display_label(severity, SEVERITIES),
+                      escape(finding.get("description", "")), escape(finding.get("url", "")),
                       style=SEVERITY_STYLES.get(severity, ""))
     out.print(table)
 
