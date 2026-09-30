@@ -347,3 +347,27 @@ def test_test_command_propagates_failure_exit_code(tmp_path):
     (tmp_path / "bad_spec.py").write_text("def test_bad():\n    assert False\n", encoding="utf-8")
     result = runner.invoke(app, ["test", str(tmp_path)])
     assert result.exit_code != 0
+
+
+def test_help_lists_all_subcommands():
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    for name in ("run", "report", "test", "mcp"):
+        assert name in result.output
+
+
+def test_mcp_command_delegates_to_mcp_entry(monkeypatch):
+    import sys
+    import types
+
+    called = []
+    fake_module = types.ModuleType("src.mcp.index")
+
+    async def fake_main():
+        called.append(True)
+
+    fake_module.main = fake_main
+    monkeypatch.setitem(sys.modules, "src.mcp.index", fake_module)
+    result = runner.invoke(app, ["mcp"])
+    assert result.exit_code == 0
+    assert called == [True]

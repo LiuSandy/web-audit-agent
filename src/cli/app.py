@@ -3,6 +3,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 import typer
 
+from src.cli.commands.mcp import mcp_command
 from src.cli.commands.report import report_command
 from src.cli.commands.run import run_command
 from src.cli.commands.test import test_command
@@ -18,6 +19,7 @@ app = typer.Typer(help="WebAudit —— 网站探索测试代理")
 app.command("run")(run_command)
 app.command("report")(report_command)
 app.command("test")(test_command)
+app.command("mcp")(mcp_command)
 
 
 @app.callback(invoke_without_command=True)
