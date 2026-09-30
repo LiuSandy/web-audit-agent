@@ -39,3 +39,4 @@ agent_state.sqlite
 .auth.key
 reports
 generated-tests
+dist/

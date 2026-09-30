@@ -10,10 +10,10 @@
 | 1 | LangSmith 观测 | **P0** | ✅ 完成 | 每步 LLM 调用的 token/耗时/轨迹可视化 |
 | 5 | 量化实验 | **P0** | ☐ 未开始 | 检出率 / 误报率 / 步数 / token 成本四项核心数字 |
 | 2 | SEO 审计工具 | P1 | ☐ 未开始 | `src/tools/seo-audit.py` + Agent 新动作 |
-| 3 | CLI 专业化 | P2 | ☐ 未开始 | 子命令 + flags + 非交互运行 + rich 输出 |
+| 3 | CLI 专业化 | **P0** | ✅ 完成 | 子命令 + flags + 非交互运行 + rich 输出 |
 | 4 | 可视化改造 | P3 | ☐ 未开始 | HTML 报告（图表 + 截图 + 页面访问图） |
 
-建议执行顺序：**1 → 5（首轮基线）→ 2 → 3 → 4**。#1、#5 为最高优先级（用户指定）：LangSmith 接入成本最低（环境变量为主，几乎不动代码），先拿到 token/耗时数据；量化实验紧随其后建立基线，此后每完成一项重大改造复跑 #5，形成「改造前后」对比。#2 SEO 是快赢项，#3、#4 依次靠后。
+建议执行顺序：**3 → 5（首轮基线）→ 2 → 4**（#1 已完成）。优先级（用户指定，#3 于 2026-09-30 提为最高）：#5 量化实验建立基线，此后每完成一项重大改造复跑 #5，形成「改造前后」对比。#2 SEO 是快赢项，#4 依次靠后。
 
 ---
 
@@ -61,24 +61,24 @@
 
 ---
 
-## 3. CLI 专业化（P2）
+## 3. CLI 专业化（P0）
 
 **现状**：`src/index.py` 是 questionary 逐条问询 + 裸 print + emoji，无 flags、无 `--help`、无法非交互运行（自动化跑批/CI 场景不可用）。
 
 **目标**：专业 CLI 的样子——子命令、参数、管道友好、rich 美化。`rich` 已在依赖里，直接用。
 
 **任务**
-- [ ] 定参数框架（typer 或 argparse，倾向 typer：类型提示自动生成 help）
-- [ ] 子命令设计（草案）：
+- [x] 定参数框架（typer 或 argparse，倾向 typer：类型提示自动生成 help）
+- [x] 子命令设计（草案）：
   - `run <url>`：非交互运行探索（`--autonomous --max-steps N --json`）
   - `report <session-id>`：按会话重新生成报告
   - `test`：等价现有 `src/cli/run_tests.py`，执行生成的 E2E 测试
   - `mcp`：启动 MCP server（等价 `src/mcp/index.py`）
   - 交互模式保留为无参数时的默认行为
-- [ ] rich 输出：spinner/status（`agent.start()` 阶段）、findings 表格、severity 着色
-- [ ] 退出码约定：0 成功 / 1 探索异常 / 2 参数错误（脚本化友好）
-- [ ] `--json` 输出模式：findings 直接打印 JSON，供管道消费
-- [ ] 顺手清理：`wrap_text(str, ...)` 遮蔽内建 `str`（`src/index.py`）——importlib 手动加载 hyphen 模块的写法已随文件名规范化（2026-09-30）整体移除，无需再抽助手
+- [x] rich 输出：spinner/status（`agent.start()` 阶段）、findings 表格、severity 着色
+- [x] 退出码约定：0 成功 / 1 探索异常 / 2 参数错误（脚本化友好）
+- [x] `--json` 输出模式：findings 直接打印 JSON，供管道消费
+- [x] 顺手清理：`wrap_text(str, ...)` 遮蔽内建 `str`（`src/index.py`）——importlib 手动加载 hyphen 模块的写法已随文件名规范化（2026-09-30）整体移除，无需再抽助手
 
 **验收**
 - `uv run python -m src.index --help` 输出规范用法
@@ -156,3 +156,5 @@
 | 2026-09-30 | #1 面板验证通过：3 条 agent.step trace 落库，metadata 与逐步延迟可见，任务正式完成；验证用临时脚本已删除 |
 | 2026-09-30 | 模块文件名规范化：19 个连字符/点号命名的文件 `git mv` 为 snake_case（PEP 8），全部 importlib 动态加载改为普通 import（仅保留 mcp tools 内打破循环依赖的函数级延迟导入）；AGENTS.md 命名规范与 README/docs 中的路径、命令同步更新。ruff 通过，全量 64 项测试通过（1 项外部服务超时，重跑通过） |
 | 2026-09-30 | 标识符命名规范化（PEP 8）：44 个文件、约 1260 处 camelCase 变量/函数/方法名批量改为 snake_case；类名保持 PascalCase，dict/JSON 键（MCP schema、state、LangSmith metadata、SQL）、内联 JS 与外部 API 参数（mimeType/includeAA 等）按契约保留。AGENTS.md 命名规范与 observability/ROADMAP 中的标识符引用同步更新。ruff 通过，全量 64 项测试通过（2 项 httpstat.us 外部超时，重跑通过），22 个模块 import 冒烟通过 |
+| 2026-09-30 | 优先级调整（用户指定）：#3 CLI 专业化提为最高（P2 → P0），执行顺序改为 3 → 5 → 2 → 4（#1 已完成） |
+| 2026-09-30 | #3 CLI 专业化实现完成：typer 子命令 run/report/test/mcp + 向导重写（rich 渲染、共用 runner）+ 退出码契约 0/1/2/130 + --json 输出 + hatchling 打包（uv build 可装）。src/cli/run_tests.py 由 test 子命令替代；wrap_text 遮蔽内建问题随旧向导消解。ruff 通过，全量 103 项测试通过 |

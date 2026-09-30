@@ -40,26 +40,28 @@ cp .env.example .env
 
 ## 运行
 
-启动交互式探索：
-
-~~~bash
+```bash
+# 交互向导（无子命令时的默认入口）
 uv run python -m src.index
-~~~
 
-按提示输入目标网址、选择自主或人工引导模式、决定是否生成测试，并选择新建或恢复会话。结束后，探索报告写入 `reports/report-<session-id>.md`。
+# 非交互探索（脚本 / 跑批）
+uv run python -m src.index run <url> --max-steps 10 --json
 
-运行已有的生成测试：
+# 按会话重出报告
+uv run python -m src.index report --list
+uv run python -m src.index report <session-id>
 
-~~~bash
-uv run python -m src.cli.run_tests
-uv run pytest generated-tests/broken-images/
-~~~
+# 执行生成的 E2E 测试
+uv run python -m src.index test
 
-启动 MCP 服务：
+# 启动 MCP stdio server
+uv run python -m src.index mcp
 
-~~~bash
-uv run python -m src.mcp.index
-~~~
+# 安装版（可选）：构建 wheel 并试用
+uv build && uv tool install dist/*.whl && webaudit --version
+```
+
+交互向导（无子命令时的默认入口）按提示输入目标网址、选择自主或人工引导模式、决定是否生成测试，并选择新建或恢复会话。结束后，探索报告写入 `reports/report-<session-id>.md`。
 
 MCP 客户端配置、工具和资源见 [MCP 服务说明](docs/mcp-server.md)。`scripts/deploy-mcp.sh` 可创建指向同一 Python 入口的包装脚本。
 
