@@ -1,12 +1,16 @@
 """WebAudit CLI 层的测试（ROADMAP #3）。"""
+import asyncio
 import io
 
+import pytest
 from rich.console import Console
 from typer.testing import CliRunner
 
 from src.cli.app import app
 from src.cli.core.config import RunOptions, build_config, new_session_id, validate_auth
 from src.cli.core.console import findings_table, friendly_hint, render_step
+from src.cli.core.runner import StopExploration, explore, finish_session
+from tests.fakes import FakeAgent, STEP_A, STEP_B
 
 runner = CliRunner()
 
@@ -103,3 +107,73 @@ def test_friendly_hint_suggests_playwright_install():
 
 def test_friendly_hint_passes_through_unknown_errors():
     assert friendly_hint(RuntimeError("boom")) == "boom"
+
+
+@pytest.mark.asyncio
+async def test_explore_yields_steps_until_completed_and_stops_agent():
+    agent = FakeAgent(steps=[STEP_A, STEP_B])
+    results = [result async for result in explore(agent, pause=0)]
+    assert [result["reason"] for result in results] == ["第一步原因", "最后一步原因"]
+    assert agent.started and agent.stopped
+
+
+@pytest.mark.asyncio
+async def test_explore_guidance_callback_receives_result_and_injects_text():
+    agent = FakeAgent(steps=[STEP_A, STEP_B])
+    seen = []
+
+    async def guidance(result):
+        seen.append(result["reason"])
+        return "聚焦登录页" if len(seen) == 1 else None
+
+    results = [result async for result in explore(agent, guidance, pause=0)]
+    assert seen == ["第一步原因"]
+    assert agent.step_calls[1] == "聚焦登录页"
+    assert len(results) == 2
+
+
+@pytest.mark.asyncio
+async def test_explore_stop_exploration_ends_loop_and_stops_agent():
+    agent = FakeAgent(steps=[STEP_A, STEP_A, STEP_B])
+
+    async def guidance(result):
+        raise StopExploration()
+
+    results = [result async for result in explore(agent, guidance, pause=0)]
+    assert len(results) == 1 and agent.stopped
+
+
+@pytest.mark.asyncio
+async def test_explore_stops_agent_when_cancelled():
+    agent = FakeAgent(steps=[STEP_A], cancelled_during=1)
+    with pytest.raises(asyncio.CancelledError):
+        [result async for result in explore(agent, pause=0)]
+    assert agent.stopped
+
+
+@pytest.mark.asyncio
+async def test_finish_session_returns_report_and_generated_tests(monkeypatch):
+    async def fake_report(findings, visited, session_id, base_url):
+        return "reports/fake.md"
+
+    monkeypatch.setattr("src.cli.core.runner.generate_report", fake_report)
+    agent = FakeAgent()
+    report_path, generated = await finish_session(agent, {"sessionId": "s1", "baseUrl": "https://x"}, True)
+    assert report_path == "reports/fake.md"
+    assert generated == agent.generated
+
+
+@pytest.mark.asyncio
+async def test_finish_session_swallows_test_generation_failure(monkeypatch):
+    async def fake_report(findings, visited, session_id, base_url):
+        return "reports/fake.md"
+
+    monkeypatch.setattr("src.cli.core.runner.generate_report", fake_report)
+    agent = FakeAgent()
+
+    async def failing_generate_tests():
+        raise RuntimeError("boom")
+
+    agent.generate_tests = failing_generate_tests
+    report_path, generated = await finish_session(agent, {"sessionId": "s", "baseUrl": "b"}, True)
+    assert report_path == "reports/fake.md" and generated is None
