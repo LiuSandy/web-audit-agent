@@ -19,7 +19,7 @@ def db():
 
 
 def test_should_create_all_3_tables_in_single_database(db):
-    names = [row["name"] for row in db.getDatabase().execute(
+    names = [row["name"] for row in db.get_database().execute(
         "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name"
     )]
     assert "agent_sessions" in names
@@ -30,7 +30,7 @@ def test_should_create_all_3_tables_in_single_database(db):
 @pytest.mark.asyncio
 async def test_CredentialStorage_should_store_and_retrieve_credentials(db, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    storage = CredentialStorage(db.getDatabase())
+    storage = CredentialStorage(db.get_database())
     await storage.set("testapp", {"email": "test@example.com", "password": "SecurePass123!"})
     retrieved = await storage.get("testapp")
     assert retrieved["email"] == "test@example.com"
@@ -40,7 +40,7 @@ async def test_CredentialStorage_should_store_and_retrieve_credentials(db, tmp_p
 @pytest.mark.asyncio
 async def test_CredentialStorage_should_list_stored_credentials(db, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    storage = CredentialStorage(db.getDatabase())
+    storage = CredentialStorage(db.get_database())
     await storage.set("app1", {"password": "p1"})
     await storage.set("app2", {"password": "p2"})
     names = await storage.list()
@@ -48,13 +48,13 @@ async def test_CredentialStorage_should_list_stored_credentials(db, tmp_path, mo
 
 
 def test_SessionRepository_should_save_and_load_agent_state(db):
-    repository = SessionRepository(db.getDatabase())
+    repository = SessionRepository(db.get_database())
     state = {
         "visitedUrls": OrderedSet(["http://example.com"]), "findings": [], "steps": 5,
         "history": [], "todoQueue": ["http://example.com/page2"],
     }
-    repository.saveState("test-session-1", state)
-    loaded = repository.loadState("test-session-1")
+    repository.save_state("test-session-1", state)
+    loaded = repository.load_state("test-session-1")
     assert loaded is not None
     assert loaded["steps"] == 5
     assert isinstance(loaded["visitedUrls"], set)
@@ -62,31 +62,31 @@ def test_SessionRepository_should_save_and_load_agent_state(db):
 
 
 def test_SessionRepository_should_list_sessions(db):
-    repository = SessionRepository(db.getDatabase())
+    repository = SessionRepository(db.get_database())
     for identifier in ("session-1", "session-2"):
-        repository.saveState(identifier, {
+        repository.save_state(identifier, {
             "visitedUrls": OrderedSet(), "findings": [], "steps": 1,
             "history": [], "todoQueue": [],
         })
-    assert {"session-1", "session-2"}.issubset(set(repository.listSessions()))
+    assert {"session-1", "session-2"}.issubset(set(repository.list_sessions()))
 
 
 def test_should_use_single_database_file(db, tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    connection = db.getDatabase()
+    connection = db.get_database()
     CredentialStorage(connection)
-    SessionRepository(connection).listSessions()
+    SessionRepository(connection).list_sessions()
     SessionManager(connection)
 
 
 def test_SessionRepository_preserves_Set_insertion_order(db):
-    repository = SessionRepository(db.getDatabase())
+    repository = SessionRepository(db.get_database())
     urls = OrderedSet(["https://example.com/second", "https://example.com/first"])
-    repository.saveState("ordered", {
+    repository.save_state("ordered", {
         "visitedUrls": urls, "findings": [], "steps": 2,
         "history": [], "todoQueue": [],
     })
-    loaded = repository.loadState("ordered")
+    loaded = repository.load_state("ordered")
     assert list(loaded["visitedUrls"]) == ["https://example.com/second", "https://example.com/first"]
 
 
@@ -96,5 +96,5 @@ def test_SessionRepository_preserves_Set_insertion_order(db):
     ("browser_sessions", {"app_identifier", "cookies", "storage_state", "expires_at", "created_at", "updated_at"}),
 ])
 def test_table_should_have_correct_schema(db, table, columns):
-    actual = {row["name"] for row in db.getDatabase().execute(f"PRAGMA table_info({table})")}
+    actual = {row["name"] for row in db.get_database().execute(f"PRAGMA table_info({table})")}
     assert columns.issubset(actual)

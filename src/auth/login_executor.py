@@ -7,37 +7,37 @@ from src.auth.mfa_handler import MFAHandler
 
 class LoginExecutor:
     def __init__(self):
-        self.mfaHandler = MFAHandler()
+        self.mfa_handler = MFAHandler()
 
-    async def execute(self, page, loginFlow, credentials):
+    async def execute(self, page, login_flow, credentials):
         try:
-            if loginFlow["type"] == "form":
-                return await self.executeFormLogin(page, loginFlow, credentials)
-            if loginFlow["type"] == "oauth":
+            if login_flow["type"] == "form":
+                return await self.execute_form_login(page, login_flow, credentials)
+            if login_flow["type"] == "oauth":
                 return {"success": False, "method": "oauth", "error": "尚未实现 OAuth 登录"}
-            return {"success": False, "method": loginFlow["type"],
+            return {"success": False, "method": login_flow["type"],
                     "error": "暂不支持该登录方式"}
         except Exception as error:
-            return {"success": False, "method": loginFlow["type"], "error": str(error)}
+            return {"success": False, "method": login_flow["type"], "error": str(error)}
 
-    async def executeFormLogin(self, page, loginFlow, credentials):
-        if loginFlow.get("emailField") and credentials.get("email"):
-            await page.fill(loginFlow["emailField"], credentials["email"])
-        elif loginFlow.get("usernameField") and credentials.get("username"):
-            await page.fill(loginFlow["usernameField"], credentials["username"])
-        elif loginFlow.get("usernameField") and credentials.get("email"):
-            await page.fill(loginFlow["usernameField"], credentials["email"])
-        if loginFlow.get("passwordField") and credentials.get("password"):
-            await page.fill(loginFlow["passwordField"], credentials["password"])
-        if loginFlow.get("submitButton"):
+    async def execute_form_login(self, page, login_flow, credentials):
+        if login_flow.get("emailField") and credentials.get("email"):
+            await page.fill(login_flow["emailField"], credentials["email"])
+        elif login_flow.get("usernameField") and credentials.get("username"):
+            await page.fill(login_flow["usernameField"], credentials["username"])
+        elif login_flow.get("usernameField") and credentials.get("email"):
+            await page.fill(login_flow["usernameField"], credentials["email"])
+        if login_flow.get("passwordField") and credentials.get("password"):
+            await page.fill(login_flow["passwordField"], credentials["password"])
+        if login_flow.get("submitButton"):
             try:
-                await page.wait_for_selector(loginFlow["submitButton"], state="visible", timeout=5000)
-                await page.locator(loginFlow["submitButton"]).click()
+                await page.wait_for_selector(login_flow["submitButton"], state="visible", timeout=5000)
+                await page.locator(login_flow["submitButton"]).click()
             except Exception:
-                if loginFlow.get("passwordField"):
-                    await page.locator(loginFlow["passwordField"]).press("Enter")
-        elif loginFlow.get("passwordField"):
-            await page.locator(loginFlow["passwordField"]).press("Enter")
+                if login_flow.get("passwordField"):
+                    await page.locator(login_flow["passwordField"]).press("Enter")
+        elif login_flow.get("passwordField"):
+            await page.locator(login_flow["passwordField"]).press("Enter")
         try:
             await page.wait_for_url(re.compile(r"^(?!.*sign-in)(?!.*login).*"), timeout=10000)
         except Exception:
@@ -47,16 +47,16 @@ class LoginExecutor:
         except Exception:
             pass
         if credentials.get("totpSecret"):
-            handled = await self.mfaHandler.handleTOTP(page, credentials["totpSecret"])
+            handled = await self.mfa_handler.handle_totp(page, credentials["totpSecret"])
             if handled:
                 await page.wait_for_timeout(2000)
-        success = await self.verifyLoginSuccess(page)
+        success = await self.verify_login_success(page)
         result = {"success": success, "method": "form"}
         if not success:
             result["error"] = "登录验证失败"
         return result
 
-    async def verifyLoginSuccess(self, page):
+    async def verify_login_success(self, page):
         url = page.url.lower()
         if not any(x in url for x in ["sign-in", "signin", "login"]):
             return True

@@ -8,38 +8,38 @@ from src.auth.session_manager import SessionManager
 
 class AuthenticationManager:
     def __init__(self, db, config=None):
-        self.credentialProvider = CredentialProvider(db, config)
-        self.loginDetector = LoginFlowDetector()
-        self.loginExecutor = LoginExecutor()
-        self.sessionManager = SessionManager(db)
+        self.credential_provider = CredentialProvider(db, config)
+        self.login_detector = LoginFlowDetector()
+        self.login_executor = LoginExecutor()
+        self.session_manager = SessionManager(db)
 
-    async def authenticate(self, page, appIdentifier):
+    async def authenticate(self, page, app_identifier):
         try:
-            if await self.isAuthenticated(page):
+            if await self.is_authenticated(page):
                 return {"success": True, "method": "session-reuse"}
-            restored = await self.sessionManager.restoreSession(page, appIdentifier)
-            if restored and await self.isAuthenticated(page):
+            restored = await self.session_manager.restore_session(page, app_identifier)
+            if restored and await self.is_authenticated(page):
                 return {"success": True, "method": "session-restore"}
-            loginFlow = await self.loginDetector.detect(page)
-            if not loginFlow:
-                navigated = await self.loginDetector.tryNavigateToLogin(page)
+            login_flow = await self.login_detector.detect(page)
+            if not login_flow:
+                navigated = await self.login_detector.try_navigate_to_login(page)
                 if navigated:
-                    loginFlow = await self.loginDetector.detect(page)
-            if not loginFlow:
+                    login_flow = await self.login_detector.detect(page)
+            if not login_flow:
                 return {"success": False, "method": "detection-failed",
                         "error": "未检测到登录流程"}
             try:
-                credentials = await self.credentialProvider.getCredentials(appIdentifier)
+                credentials = await self.credential_provider.get_credentials(app_identifier)
             except Exception as error:
                 return {"success": False, "method": "credential-retrieval", "error": str(error)}
-            result = await self.loginExecutor.execute(page, loginFlow, credentials)
+            result = await self.login_executor.execute(page, login_flow, credentials)
             if result["success"]:
-                await self.sessionManager.saveSession(page, appIdentifier)
+                await self.session_manager.save_session(page, app_identifier)
             return result
         except Exception as error:
             return {"success": False, "method": "unknown", "error": str(error)}
 
-    async def isAuthenticated(self, page):
+    async def is_authenticated(self, page):
         indicators = await page.evaluate("""() => {
             let hasLogout = false;
             for (const el of document.querySelectorAll('button, a')) {
@@ -52,5 +52,5 @@ class AuthenticationManager:
         }""")
         return indicators["hasLogout"] or indicators["hasUserMenu"]
 
-    async def storeCredentials(self, appIdentifier, credentials):
-        return await self.credentialProvider.storeCredentials(appIdentifier, credentials)
+    async def store_credentials(self, app_identifier, credentials):
+        return await self.credential_provider.store_credentials(app_identifier, credentials)

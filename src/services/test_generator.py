@@ -6,9 +6,9 @@ from datetime import datetime, timezone
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from src.utils.logger import createLogger
+from src.utils.logger import create_logger
 
-logger = createLogger("test-generator")
+logger = create_logger("test-generator")
 
 
 class TestGenerator:
@@ -16,50 +16,50 @@ class TestGenerator:
         self.model = model
         self.config = config
 
-    async def generateTestsFromFindings(self, findings, state, baseUrl):
+    async def generate_tests_from_findings(self, findings, state, base_url):
         logger.info(f"正在根据 {len(findings)} 条发现生成端到端测试")
-        generatedTests = []
-        groupedFindings = self.groupFindingsByType(findings)
-        for category, categoryFindings in groupedFindings.items():
-            if not categoryFindings:
+        generated_tests = []
+        grouped_findings = self.group_findings_by_type(findings)
+        for category, category_findings in grouped_findings.items():
+            if not category_findings:
                 continue
             if self.config["includeE2E"]:
-                e2eTests = await self.generateE2ETests(category, categoryFindings, baseUrl)
-                generatedTests.extend(e2eTests)
-        logger.info(f"已生成 {len(generatedTests)} 个端到端测试")
-        return generatedTests
+                e2e_tests = await self.generate_e2e_tests(category, category_findings, base_url)
+                generated_tests.extend(e2e_tests)
+        logger.info(f"已生成 {len(generated_tests)} 个端到端测试")
+        return generated_tests
 
-    def groupFindingsByType(self, findings):
+    def group_findings_by_type(self, findings):
         grouped = {}
         for finding in findings:
-            category = self.categorizeFinding(finding)
+            category = self.categorize_finding(finding)
             grouped.setdefault(category, []).append(finding)
         return grouped
 
-    def categorizeFinding(self, finding):
+    def categorize_finding(self, finding):
         return {"broken_image": "broken-images", "console_error": "console-errors",
                 "network_error": "network-errors", "validation_error": "validation-errors",
                 "functional_bug": "functional"}.get(finding["type"], "general")
 
-    async def generateE2ETests(self, category, findings, baseUrl):
-        prompt = self.createE2ETestPrompt(category, findings, baseUrl)
+    async def generate_e2e_tests(self, category, findings, base_url):
+        prompt = self.create_e2e_test_prompt(category, findings, base_url)
         try:
             response = await self.model.ainvoke([
                 SystemMessage(content="你是测试自动化工程师。只生成使用 pytest 和 playwright.sync_api 的可执行 Python 端到端测试。保留 pytest 可发现的 test_ 函数名和 Python 标识符；测试说明、docstring 与面向用户的断言消息使用简体中文。只返回 Python 代码，不生成 JavaScript 或 TypeScript。"),
                 HumanMessage(content=prompt)])
-            return self.parseTestResponse(str(response.content), category)
+            return self.parse_test_response(str(response.content), category)
         except Exception as error:
             logger.error(f"为 {category} 生成端到端测试失败：", error)
             return []
 
-    def createE2ETestPrompt(self, category, findings, baseUrl):
-        findingsText = "\n".join(f"- {f['description']}，页面：{f['url']}（选择器：{f.get('selector') or '无'}）" for f in findings)
+    def create_e2e_test_prompt(self, category, findings, base_url):
+        findings_text = "\n".join(f"- {f['description']}，页面：{f['url']}（选择器：{f.get('selector') or '无'}）" for f in findings)
         return f"""请为以下 {category} 类问题生成完整的端到端测试：
 
-目标地址：{baseUrl}
+目标地址：{base_url}
 
 问题：
-{findingsText}
+{findings_text}
 
 要求：
 1. 只编写 Python，使用 pytest 和 playwright.sync_api。
@@ -95,15 +95,15 @@ def page(browser):
         context.close()
 
 def test_specific_issue(page):
-    page.goto("{baseUrl}")
+    page.goto("{base_url}")
     expect(page.locator("body")).to_be_visible()
 """
 
-    def parseTestResponse(self, response, category):
+    def parse_test_response(self, response, category):
         tests = []
-        for index, testContent in enumerate(self.extractTestBlocks(response)):
+        for index, test_content in enumerate(self.extract_test_blocks(response)):
             try:
-                tree = ast.parse(testContent)
+                tree = ast.parse(test_content)
             except SyntaxError as error:
                 logger.error(f"为 {category} 生成的测试不是有效的 Python 代码：", error)
                 continue
@@ -111,34 +111,34 @@ def test_specific_issue(page):
                        and node.name.startswith("test_") for node in tree.body):
                 logger.warn(f"为 {category} 生成的测试缺少 pytest test_ 函数")
                 continue
-            tests.append({"name": self.generateTestName(category, "e2e", index, testContent),
-                          "description": self.extractTestDescription(testContent),
-                          "filePath": self.generateFilePath(category, "e2e", index),
-                          "content": testContent, "testType": "e2e",
-                          "priority": self.determinePriority(category, "e2e")})
+            tests.append({"name": self.generate_test_name(category, "e2e", index, test_content),
+                          "description": self.extract_test_description(test_content),
+                          "filePath": self.generate_file_path(category, "e2e", index),
+                          "content": test_content, "testType": "e2e",
+                          "priority": self.determine_priority(category, "e2e")})
         return tests
 
-    def extractTestBlocks(self, response):
+    def extract_test_blocks(self, response):
         matches = re.findall(r"```(?:python|py)?\s*\n([\s\S]*?)\n```", response, re.IGNORECASE)
         if matches:
             return [match.strip() for match in matches]
         return [response.strip()]
 
-    def generateTestName(self, category, testType, index, content):
+    def generate_test_name(self, category, test_type, index, content):
         match = re.search(r"(?:async\s+)?def\s+(test_\w+)\s*\(", content)
-        return match.group(1) if match else f"{category}-{testType}-test-{index + 1}"
+        return match.group(1) if match else f"{category}-{test_type}-test-{index + 1}"
 
-    def generateFilePath(self, category, testType, index):
+    def generate_file_path(self, category, test_type, index):
         timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-        return f"{self.config['outputDir']}/{category}/{testType}-{timestamp}-{index + 1}_spec.py"
+        return f"{self.config['outputDir']}/{category}/{test_type}-{timestamp}-{index + 1}_spec.py"
 
-    def extractTestDescription(self, content):
+    def extract_test_description(self, content):
         match = re.search(r'(?:async\s+)?def\s+test_\w+\s*\([^)]*\):\s*\n\s*[\"\']{3}(.+?)[\"\']{3}', content, re.DOTALL)
         return match.group(1).strip() if match else "根据代理发现的问题生成的测试"
 
-    def determinePriority(self, category, testType):
+    def determine_priority(self, category, test_type):
         if category in ("functional", "network-errors"):
             return "high"
-        if testType == "e2e":
+        if test_type == "e2e":
             return "medium"
         return "low"

@@ -27,7 +27,7 @@
 - [x] 调研 langchain-core 的 tracing 接入方式（环境变量 `LANGSMITH_TRACING` / API key，或显式 callback）——结论：环境变量零侵入 + `langsmith.traceable` 装饰器组合
 - [x] 配置项进 `.env.example`，代码零侵入优先（环境变量方案）
 - [x] 给每步 trace 注入结构化 metadata：`sessionId`、`step`、`url`、`visitedCount`、`queueLength`
-- [x] （加分）把 `executeAction`、`performAutomaticBugScanning` 作为子 run 上报，形成步骤级调用树——已实现：`agent.step → LLM 调用 / execute_action → automatic_bug_scanning` 三层树
+- [x] （加分）把 `execute_action`、`perform_automatic_bug_scanning` 作为子 run 上报，形成步骤级调用树——已实现：`agent.step → LLM 调用 / execute_action → automatic_bug_scanning` 三层树
 - [x] 文档：`docs/observability.md` 记录接入方式与面板解读（面板截图待运行后补充）
 
 **验收**
@@ -50,7 +50,7 @@
   - [ ] `img` 缺 `alt`、`html` 缺 `lang`
   - [ ] canonical / viewport / robots meta
 - [ ] 定义 finding 类型与严重度映射（参照 `BROKEN_IMAGE_REASONS` 在 `src/utils/locale.py` 的做法）
-- [ ] 注册动作：`_SYSTEM_PROMPT` 动作表 + `executeAction()` 分支 + 自动扫描管线（`performAutomaticBugScanning`）按需纳入
+- [ ] 注册动作：`_SYSTEM_PROMPT` 动作表 + `execute_action()` 分支 + 自动扫描管线（`perform_automatic_bug_scanning`）按需纳入
 - [ ] MCP 侧同步暴露（`src/mcp/tools/definitions.py`）
 - [ ] 测试：`tests/tools/seo-audit.test.py`（用 `tests/test-resources/` 的 fixture 页面）
 
@@ -78,7 +78,7 @@
 - [ ] rich 输出：spinner/status（`agent.start()` 阶段）、findings 表格、severity 着色
 - [ ] 退出码约定：0 成功 / 1 探索异常 / 2 参数错误（脚本化友好）
 - [ ] `--json` 输出模式：findings 直接打印 JSON，供管道消费
-- [ ] 顺手清理：`wrapText(str, ...)` 遮蔽内建 `str`（`src/index.py`）——importlib 手动加载 hyphen 模块的写法已随文件名规范化（2026-09-30）整体移除，无需再抽助手
+- [ ] 顺手清理：`wrap_text(str, ...)` 遮蔽内建 `str`（`src/index.py`）——importlib 手动加载 hyphen 模块的写法已随文件名规范化（2026-09-30）整体移除，无需再抽助手
 
 **验收**
 - `uv run python -m src.index --help` 输出规范用法
@@ -155,3 +155,4 @@
 | 2026-09-30 | #1 LangSmith 观测实现完成：环境变量接入 + traceable 步骤级调用树（两个 Agent 均覆盖）+ docs/observability.md；新增单测 3 项，ruff 与全量 64 项测试通过。待配置 LANGSMITH_API_KEY 后做面板验证 |
 | 2026-09-30 | #1 面板验证通过：3 条 agent.step trace 落库，metadata 与逐步延迟可见，任务正式完成；验证用临时脚本已删除 |
 | 2026-09-30 | 模块文件名规范化：19 个连字符/点号命名的文件 `git mv` 为 snake_case（PEP 8），全部 importlib 动态加载改为普通 import（仅保留 mcp tools 内打破循环依赖的函数级延迟导入）；AGENTS.md 命名规范与 README/docs 中的路径、命令同步更新。ruff 通过，全量 64 项测试通过（1 项外部服务超时，重跑通过） |
+| 2026-09-30 | 标识符命名规范化（PEP 8）：44 个文件、约 1260 处 camelCase 变量/函数/方法名批量改为 snake_case；类名保持 PascalCase，dict/JSON 键（MCP schema、state、LangSmith metadata、SQL）、内联 JS 与外部 API 参数（mimeType/includeAA 等）按契约保留。AGENTS.md 命名规范与 observability/ROADMAP 中的标识符引用同步更新。ruff 通过，全量 64 项测试通过（2 项 httpstat.us 外部超时，重跑通过），22 个模块 import 冒烟通过 |

@@ -1,9 +1,9 @@
 """Layout audit for a page; DOM heuristics run in the browser."""
 
-from src.tools.screenshot import captureLayoutFindingScreenshots
-from src.utils.logger import createLogger
+from src.tools.screenshot import capture_layout_finding_screenshots
+from src.utils.logger import create_logger
 
-logger = createLogger("tool:layout-audit")
+logger = create_logger("tool:layout-audit")
 
 _LAYOUT_CALLBACK = r'''
 (opts) => {
@@ -164,29 +164,29 @@ _LAYOUT_CALLBACK = r'''
 '''
 
 
-async def runLayoutAudit(page, config=None):
+async def run_layout_audit(page, config=None):
     config = config or {}
     logger.log("正在检查页面布局……")
-    maxElements = config.get("maxElements", 300)
+    max_elements = config.get("maxElements", 300)
     heuristics = config.get("heuristics")
-    findings = await page.evaluate(_LAYOUT_CALLBACK, {"maxElements": maxElements,
+    findings = await page.evaluate(_LAYOUT_CALLBACK, {"maxElements": max_elements,
                                                       "heuristics": heuristics})
     logger.log(f"页面布局检查发现 {len(findings)} 个疑似问题")
     screenshots = config.get("screenshots") or {}
     if screenshots.get("enabled") and findings:
         logger.log("正在为布局问题截图……")
-        screenshotConfig = {"enabled": True,
+        screenshot_config = {"enabled": True,
             "outputDir": screenshots.get("outputDir") or "./test-results/layout-audit",
             "fullPage": True,
             "highlightElements": screenshots.get("highlightElements", True),
             "type": screenshots.get("type") or "png"}
-        screenshotMap = await captureLayoutFindingScreenshots(
-            page, findings, screenshotConfig, config.get("sessionId") or "unknown")
-        for index, paths in screenshotMap.items():
+        screenshot_map = await capture_layout_finding_screenshots(
+            page, findings, screenshot_config, config.get("sessionId") or "unknown")
+        for index, paths in screenshot_map.items():
             if index < len(findings):
                 if paths.get("elementPath"):
                     findings[index]["screenshot"] = paths["elementPath"]
                 if paths.get("fullPagePath"):
                     findings[index]["fullPageScreenshot"] = paths["fullPagePath"]
-        logger.log(f"已为 {len(screenshotMap)} 个布局问题截图")
+        logger.log(f"已为 {len(screenshot_map)} 个布局问题截图")
     return findings

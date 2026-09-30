@@ -8,11 +8,11 @@ from src.mcp.server import TestingAgentMCPServer
 
 
 async def main():
-    mcpServer = TestingAgentMCPServer()
+    mcp_server = TestingAgentMCPServer()
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(mcpServer.stop()))
-    await mcpServer.start()
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(mcp_server.stop()))
+    await mcp_server.start()
 
 
 if __name__ == "__main__":

@@ -5,16 +5,16 @@ from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.shared.exceptions import MCPError
 
-from src.mcp.resources.reports import handleTestReportResource
+from src.mcp.resources.reports import handle_test_report_resource
 from src.mcp.tools.definitions import TOOL_DEFINITIONS
-from src.mcp.tools.exploratory import handleRunExploratoryTest
-from src.mcp.tools.sessions import handleListSessions
-from src.mcp.tools.single_page import handleRunSinglePageTest
-from src.mcp.tools.status import handleGetTestStatus, handleStopTest
-from src.utils.logger import createLogger
+from src.mcp.tools.exploratory import handle_run_exploratory_test
+from src.mcp.tools.sessions import handle_list_sessions
+from src.mcp.tools.single_page import handle_run_single_page_test
+from src.mcp.tools.status import handle_get_test_status, handle_stop_test
+from src.utils.logger import create_logger
 
-logger = createLogger("mcp-server")
-activeTests = {}
+logger = create_logger("mcp-server")
+active_tests = {}
 
 
 class TestingAgentMCPServer:
@@ -23,34 +23,34 @@ class TestingAgentMCPServer:
             on_list_tools=self._on_list_tools, on_call_tool=self._on_call_tool,
             on_list_resources=self._on_list_resources,
             on_read_resource=self._on_read_resource)
-        self.setupHandlers()
+        self.setup_handlers()
 
-    def setupHandlers(self):
+    def setup_handlers(self):
         return None
 
     async def _on_list_tools(self, context, params):
         return types.ListToolsResult(tools=[types.Tool(**definition) for definition in TOOL_DEFINITIONS])
 
     async def _on_call_tool(self, context, params):
-        toolName = params.name
+        tool_name = params.name
         args = params.arguments or {}
-        logger.info(f"调用工具：{toolName}，参数：{args}")
+        logger.info(f"调用工具：{tool_name}，参数：{args}")
         try:
-            if toolName == "run_exploratory_test":
-                result = await handleRunExploratoryTest(args)
-            elif toolName == "run_single_page_test":
-                result = await handleRunSinglePageTest(args)
-            elif toolName == "get_test_status":
-                result = await handleGetTestStatus(args)
-            elif toolName == "stop_test":
-                result = await handleStopTest(args)
-            elif toolName == "list_sessions":
-                result = await handleListSessions(args)
+            if tool_name == "run_exploratory_test":
+                result = await handle_run_exploratory_test(args)
+            elif tool_name == "run_single_page_test":
+                result = await handle_run_single_page_test(args)
+            elif tool_name == "get_test_status":
+                result = await handle_get_test_status(args)
+            elif tool_name == "stop_test":
+                result = await handle_stop_test(args)
+            elif tool_name == "list_sessions":
+                result = await handle_list_sessions(args)
             else:
-                raise MCPError(types.METHOD_NOT_FOUND, f"未知工具：{toolName}")
+                raise MCPError(types.METHOD_NOT_FOUND, f"未知工具：{tool_name}")
             return types.CallToolResult(content=[types.TextContent(**item) for item in result["content"]])
         except Exception as error:
-            logger.error(f"工具 {toolName} 执行失败：{error}")
+            logger.error(f"工具 {tool_name} 执行失败：{error}")
             raise MCPError(types.INTERNAL_ERROR, str(error)) from error
 
     async def _on_list_resources(self, context, params):
@@ -63,7 +63,7 @@ class TestingAgentMCPServer:
     async def _on_read_resource(self, context, params):
         uri = str(params.uri)
         if uri.startswith("test-report://"):
-            result = await handleTestReportResource(uri)
+            result = await handle_test_report_resource(uri)
             return types.ReadResourceResult(contents=[types.TextResourceContents(**item)
                                                       for item in result["contents"]])
         raise MCPError(types.INVALID_REQUEST, f"未知资源地址：{uri}")

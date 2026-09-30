@@ -10,34 +10,34 @@ from src.types.index import AgentFinding
 from src.utils.locale import FINDING_TYPES, SEVERITIES, display_label
 
 
-async def generateReport(
+async def generate_report(
     findings: list[AgentFinding],
-    visitedUrls: list[str] | None = None,
-    sessionId: str | None = None,
-    baseUrl: str | None = None,
+    visited_urls: list[str] | None = None,
+    session_id: str | None = None,
+    base_url: str | None = None,
 ) -> str:
     timestamp = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     timestamp = timestamp.replace(":", "-").replace(".", "-")
-    filename = f"report-{sessionId}.md" if sessionId else f"report-{timestamp}.md"
+    filename = f"report-{session_id}.md" if session_id else f"report-{timestamp}.md"
     path = f"reports/{filename}"
-    target = baseUrl or "未知"
-    if not baseUrl and visitedUrls:
-        firstUrl = visitedUrls[0]
+    target = base_url or "未知"
+    if not base_url and visited_urls:
+        first_url = visited_urls[0]
         try:
-            target = urlparse(firstUrl).netloc or firstUrl
+            target = urlparse(first_url).netloc or first_url
         except Exception:  # noqa: BLE001 - source falls back to original URL
-            target = firstUrl
+            target = first_url
 
     content = (
         f"# 探索性测试报告\n"
         f"日期：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"  # noqa: DTZ005 - local time
         f"测试目标：{target}\n\n"
         f"## 摘要\n发现问题：{len(findings)}\n"
-        f"已探索页面：{len(visitedUrls) if visitedUrls else 0}\n"
+        f"已探索页面：{len(visited_urls) if visited_urls else 0}\n"
     )
-    if visitedUrls:
+    if visited_urls:
         content += "\n## 已访问页面\n"
-        for url in visitedUrls:
+        for url in visited_urls:
             content += f"- {url}\n"
     content += "\n## 问题详情\n\n"
     if not findings:

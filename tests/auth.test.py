@@ -39,10 +39,10 @@ def test_server():
 
 
 @pytest.fixture
-def authManager():
+def auth_manager():
     db = AppDatabase(":memory:")
-    manager = AuthenticationManager(db.getDatabase())
-    storage = CredentialStorage(db.getDatabase())
+    manager = AuthenticationManager(db.get_database())
+    storage = CredentialStorage(db.get_database())
     yield manager, storage
     db.close()
 
@@ -57,15 +57,15 @@ async def test_detect_login_page(page, test_server):
 
 
 @pytest.mark.asyncio
-async def test_not_authenticated_on_login_page(page, test_server, authManager):
-    manager, _ = authManager
+async def test_not_authenticated_on_login_page(page, test_server, auth_manager):
+    manager, _ = auth_manager
     await page.goto(f"{test_server}/login.html")
-    assert await manager.isAuthenticated(page) is False
+    assert await manager.is_authenticated(page) is False
 
 
 @pytest.mark.asyncio
-async def test_successfully_login_with_valid_credentials(page, test_server, authManager):
-    manager, storage = authManager
+async def test_successfully_login_with_valid_credentials(page, test_server, auth_manager):
+    manager, storage = auth_manager
     await storage.set("testapp", {"email": "test@example.com", "password": "SecurePass123!"})
     await page.goto(f"{test_server}/login.html")
     await page.fill('input[type="email"]', "test@example.com")
@@ -73,7 +73,7 @@ async def test_successfully_login_with_valid_credentials(page, test_server, auth
     await page.click('button[type="submit"]')
     await page.wait_for_url("**/dashboard.html", timeout=3000)
     assert "dashboard.html" in page.url
-    assert await manager.isAuthenticated(page) is True
+    assert await manager.is_authenticated(page) is True
 
 
 @pytest.mark.asyncio
@@ -83,14 +83,14 @@ async def test_detect_authenticated_state_on_dashboard(page, test_server):
     await page.fill('input[type="password"]', "SecurePass123!")
     await page.click('button[type="submit"]')
     await page.wait_for_url("**/dashboard.html", timeout=3000)
-    hasLogoutButton = await page.evaluate("""() => {
+    has_logout_button = await page.evaluate("""() => {
       for (const el of document.querySelectorAll('button, a')) {
         const text = el.textContent?.toLowerCase() || '';
         if (text.includes('logout')) return true;
       }
       return false;
     }""")
-    assert hasLogoutButton is True
+    assert has_logout_button is True
 
 
 @pytest.mark.asyncio
@@ -101,16 +101,16 @@ async def test_fail_login_with_invalid_credentials(page, test_server):
     await page.click('button[type="submit"]')
     await page.wait_for_timeout(1500)
     assert "login.html" in page.url
-    errorVisible = await page.evaluate("""() => {
+    error_visible = await page.evaluate("""() => {
       const errorMsg = document.getElementById('errorMessage');
       return errorMsg && errorMsg.style.display !== 'none';
     }""")
-    assert errorVisible is True
+    assert error_visible is True
 
 
 @pytest.mark.asyncio
-async def test_logout_successfully(page, test_server, authManager):
-    manager, _ = authManager
+async def test_logout_successfully(page, test_server, auth_manager):
+    manager, _ = auth_manager
     await page.goto(f"{test_server}/login.html")
     await page.fill('input[type="email"]', "test@example.com")
     await page.fill('input[type="password"]', "SecurePass123!")
@@ -119,7 +119,7 @@ async def test_logout_successfully(page, test_server, authManager):
     await page.click('button:has-text("Logout")')
     await page.wait_for_url("**/login.html", timeout=3000)
     assert "login.html" in page.url
-    assert await manager.isAuthenticated(page) is False
+    assert await manager.is_authenticated(page) is False
 
 
 @pytest.mark.asyncio

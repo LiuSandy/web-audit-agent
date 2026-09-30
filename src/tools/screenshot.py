@@ -4,21 +4,21 @@ import re
 import time
 from pathlib import Path
 
-from src.utils.logger import createLogger
+from src.utils.logger import create_logger
 
-logger = createLogger("tool:screenshot")
+logger = create_logger("tool:screenshot")
 
 
-async def ensureDir(dir):
+async def ensure_dir(dir):
     Path(dir).mkdir(parents=True, exist_ok=True)
 
 
-def generateFilename(selector, index, suffix):
+def generate_filename(selector, index, suffix):
     clean = re.sub(r"[^a-zA-Z0-9_-]", "_", selector)[:50]
     return f"finding_{index}_{clean}_{suffix}_{int(time.time() * 1000)}.png"
 
 
-async def highlightElement(page, selector, color="#FF0000"):
+async def highlight_element(page, selector, color="#FF0000"):
     try:
         return await page.evaluate("""({sel, highlightColor}) => {
             const el = document.querySelector(sel);
@@ -43,7 +43,7 @@ async def highlightElement(page, selector, color="#FF0000"):
         return False
 
 
-async def removeHighlight(page, selector):
+async def remove_highlight(page, selector):
     try:
         await page.evaluate("""sel => {
             const el = document.querySelector(sel);
@@ -61,11 +61,11 @@ async def removeHighlight(page, selector):
         logger.log(f"移除元素 {selector} 的高亮失败：", error)
 
 
-async def captureFullPageScreenshot(page, config, filename):
+async def capture_full_page_screenshot(page, config, filename):
     if not config["enabled"]:
         return None
     try:
-        await ensureDir(config["outputDir"])
+        await ensure_dir(config["outputDir"])
         filepath = str(Path(config["outputDir"]) / filename)
         await page.screenshot(path=filepath, full_page=config["fullPage"],
                               type=config.get("type") or "png")
@@ -76,16 +76,16 @@ async def captureFullPageScreenshot(page, config, filename):
         return None
 
 
-async def captureElementScreenshot(page, selector, config, filename, severity="warning"):
+async def capture_element_screenshot(page, selector, config, filename, severity="warning"):
     if not config["enabled"]:
         return None
     colors = {"error": "#FF0000", "warning": "#FFA500", "info": "#0080FF"}
     highlighted = False
     try:
-        await ensureDir(config["outputDir"])
+        await ensure_dir(config["outputDir"])
         filepath = str(Path(config["outputDir"]) / filename)
         if config["highlightElements"]:
-            highlighted = await highlightElement(page, selector, colors[severity])
+            highlighted = await highlight_element(page, selector, colors[severity])
             await page.wait_for_timeout(100)
         try:
             await page.locator(selector).first.screenshot(path=filepath,
@@ -103,30 +103,30 @@ async def captureElementScreenshot(page, selector, config, filename, severity="w
         return None
     finally:
         if highlighted and config["highlightElements"]:
-            await removeHighlight(page, selector)
+            await remove_highlight(page, selector)
 
 
-async def captureLayoutFindingScreenshots(page, findings, config, sessionId):
-    screenshotMap = {}
+async def capture_layout_finding_screenshots(page, findings, config, session_id):
+    screenshot_map = {}
     if not config["enabled"] or not findings:
-        return screenshotMap
-    sessionDir = str(Path(config["outputDir"]) / sessionId)
-    await ensureDir(sessionDir)
-    fullPageFilename = f"layout_audit_full_{int(time.time() * 1000)}.png"
-    fullPagePath = await captureFullPageScreenshot(
-        page, {**config, "outputDir": sessionDir}, fullPageFilename)
+        return screenshot_map
+    session_dir = str(Path(config["outputDir"]) / session_id)
+    await ensure_dir(session_dir)
+    full_page_filename = f"layout_audit_full_{int(time.time() * 1000)}.png"
+    full_page_path = await capture_full_page_screenshot(
+        page, {**config, "outputDir": session_dir}, full_page_filename)
     for i, finding in enumerate(findings):
         result = {}
-        if fullPagePath:
-            result["fullPagePath"] = fullPagePath
+        if full_page_path:
+            result["fullPagePath"] = full_page_path
         if finding.get("selector"):
-            filename = generateFilename(finding["selector"], i, finding["type"])
-            elementPath = await captureElementScreenshot(
-                page, finding["selector"], {**config, "outputDir": sessionDir},
+            filename = generate_filename(finding["selector"], i, finding["type"])
+            element_path = await capture_element_screenshot(
+                page, finding["selector"], {**config, "outputDir": session_dir},
                 filename, finding["severity"])
-            if elementPath:
-                result["elementPath"] = elementPath
-        screenshotMap[i] = result
+            if element_path:
+                result["elementPath"] = element_path
+        screenshot_map[i] = result
         if i < len(findings) - 1:
             await page.wait_for_timeout(50)
-    return screenshotMap
+    return screenshot_map

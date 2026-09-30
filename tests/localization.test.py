@@ -5,7 +5,7 @@ import json
 import pytest
 
 from src.services.test_executor import TestExecutor as _TestExecutor
-from src.utils.report import generateReport
+from src.utils.report import generate_report
 
 
 @pytest.mark.asyncio
@@ -15,7 +15,7 @@ async def test_exploration_report_uses_chinese_labels(tmp_path, monkeypatch):
     finding = {"type": "console_error", "severity": "medium",
                "url": "https://example.com", "description": "控制台错误：示例",
                "selector": "#submit", "occurrences": ["https://example.com/next"]}
-    path = await generateReport([finding], ["https://example.com"], "test", "https://example.com")
+    path = await generate_report([finding], ["https://example.com"], "test", "https://example.com")
     content = (tmp_path / path).read_text(encoding="utf-8")
     assert "# 探索性测试报告" in content
     assert "发现问题：1" in content
@@ -29,19 +29,19 @@ def test_execution_report_uses_chinese_labels():
     test = {"name": "test_example", "testType": "e2e", "priority": "high",
             "filePath": "generated-tests/example_spec.py"}
     result = {"test": test, "success": False, "error": "断言失败", "executionTime": 12}
-    content = _TestExecutor().generateTestReport([result])
+    content = _TestExecutor().generate_test_report([result])
     assert "# 测试执行报告" in content
     assert "## 失败的测试" in content
     assert "**优先级：** 高" in content
     assert "**原始错误：** 断言失败" in content
     assert test["priority"] == "high"
-    assert "通过率：0.0%" in _TestExecutor().generateTestReport([])
+    assert "通过率：0.0%" in _TestExecutor().generate_test_report([])
 
 
 def test_execution_report_prefers_chinese_description_over_python_identifier():
     test = {"name": "test_login_with_invalid_password", "description": "错误密码应显示提示",
             "testType": "e2e", "priority": "medium", "filePath": "generated-tests/login_spec.py"}
-    content = _TestExecutor().generateTestReport([{"test": test, "success": True, "executionTime": 10}])
+    content = _TestExecutor().generate_test_report([{"test": test, "success": True, "executionTime": 10}])
     assert "**错误密码应显示提示**" in content
     assert "测试标识：`test_login_with_invalid_password`" in content
 
@@ -52,10 +52,10 @@ async def test_single_page_findings_have_chinese_context_and_raw_details(monkeyp
     agent = module.SinglePageTestingAgent.__new__(module.SinglePageTestingAgent)
     agent.page = type("Page", (), {"url": "https://example.com", "is_closed": lambda self: False,
         "evaluate": lambda self, _script: _async_value(False)})()
-    agent.consoleMonitor = type("Monitor", (), {"getErrors": lambda self: [{"message": "Script error"}]})()
-    agent.networkMonitor = type("Monitor", (), {"getErrors": lambda self: [{"statusText": "Not Found"}]})()
-    monkeypatch.setattr(module, "findBrokenImages", lambda _page: _async_value([]))
-    findings = await agent.validateOutcome({"name": "示例测试"})
+    agent.console_monitor = type("Monitor", (), {"get_errors": lambda self: [{"message": "Script error"}]})()
+    agent.network_monitor = type("Monitor", (), {"get_errors": lambda self: [{"statusText": "Not Found"}]})()
+    monkeypatch.setattr(module, "find_broken_images", lambda _page: _async_value([]))
+    findings = await agent.validate_outcome({"name": "示例测试"})
     assert findings[0]["description"] == "控制台错误：Script error"
     assert findings[0]["metadata"]["rawMessage"] == "Script error"
     assert findings[1]["description"] == "网络请求异常：Not Found"
@@ -79,9 +79,9 @@ async def test_single_page_mcp_status_has_chinese_display_text(monkeypatch):
              "testPlan": {"totalTests": 2}, "results": [{"findings": [
                  {"type": "console_error", "description": "控制台错误：示例",
                   "severity": "medium", "url": "https://example.com"}]}]}
-    monkeypatch.setattr(status_module, "_activeTests", lambda: {"sp-1": {"state": state}})
-    monkeypatch.setattr(status_module, "_getAgentInstance", lambda _session_id: None)
-    response = await status_module.handleGetTestStatus({"sessionId": "sp-1"})
+    monkeypatch.setattr(status_module, "_active_tests", lambda: {"sp-1": {"state": state}})
+    monkeypatch.setattr(status_module, "_get_agent_instance", lambda _session_id: None)
+    response = await status_module.handle_get_test_status({"sessionId": "sp-1"})
     result = json.loads(response["content"][0]["text"])
     assert result["status"] == "executing"
     assert result["statusText"] == "执行中"

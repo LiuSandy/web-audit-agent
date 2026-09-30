@@ -10,21 +10,21 @@ from typing import ClassVar
 class AppDatabase:
     instance: ClassVar[AppDatabase | None] = None
 
-    def __init__(self, dbPath: str = "qa-agent.sqlite") -> None:
-        directory = Path(dbPath).parent
+    def __init__(self, db_path: str = "qa-agent.sqlite") -> None:
+        directory = Path(db_path).parent
         if str(directory) != "." and not directory.exists():
             directory.mkdir(parents=True)
-        self.db = sqlite3.connect(dbPath, isolation_level=None)
+        self.db = sqlite3.connect(db_path, isolation_level=None)
         self.db.row_factory = sqlite3.Row
-        self.initializeSchema()
+        self.initialize_schema()
 
     @classmethod
-    def getInstance(cls, dbPath: str | None = None) -> AppDatabase:
+    def get_instance(cls, db_path: str | None = None) -> AppDatabase:
         if cls.instance is None:
-            cls.instance = cls(dbPath if dbPath is not None else "qa-agent.sqlite")
+            cls.instance = cls(db_path if db_path is not None else "qa-agent.sqlite")
         return cls.instance
 
-    def initializeSchema(self) -> None:
+    def initialize_schema(self) -> None:
         self.db.execute("""
             CREATE TABLE IF NOT EXISTS agent_sessions (
                 id TEXT PRIMARY KEY,
@@ -54,7 +54,7 @@ class AppDatabase:
             )
         """)
 
-    def getDatabase(self) -> sqlite3.Connection:
+    def get_database(self) -> sqlite3.Connection:
         return self.db
 
     def close(self) -> None:

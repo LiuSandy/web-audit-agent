@@ -47,21 +47,21 @@ def test_home_page(page):
     })
     monkeypatch.chdir(tmp_path)
     findings = [{"type": "functional_bug", "description": "Missing heading", "url": html.as_uri()}]
-    tests = await generator.generateTestsFromFindings(findings, {}, html.as_uri())
+    tests = await generator.generate_tests_from_findings(findings, {}, html.as_uri())
     assert len(tests) == 1
     assert tests[0]["name"] == "test_home_page"
     assert tests[0]["description"] == "The page displays its heading."
     assert tests[0]["filePath"].endswith("_spec.py")
 
     executor = ExecutorClass({"retryCount": 0})
-    assert await executor.saveTests(tests) == [tests[0]["filePath"]]
+    assert await executor.save_tests(tests) == [tests[0]["filePath"]]
     assert Path(tests[0]["filePath"]).is_file()
-    results = await executor.executeTests(tests)
+    results = await executor.execute_tests(tests)
     assert results[0]["success"], results[0]["output"]
-    runner.runAllTests()
+    runner.run_all_tests()
 
 
 def test_generator_rejects_non_python_or_uncollectable_output():
     generator = GeneratorClass(None, {"outputDir": "generated-tests", "includeE2E": True})
-    assert generator.parseTestResponse("```typescript\ntest('old', () => {});\n```", "general") == []
-    assert generator.parseTestResponse("```python\nprint('no test')\n```", "general") == []
+    assert generator.parse_test_response("```typescript\ntest('old', () => {});\n```", "general") == []
+    assert generator.parse_test_response("```python\nprint('no test')\n```", "general") == []

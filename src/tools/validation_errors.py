@@ -5,9 +5,9 @@ from typing import TypedDict
 from playwright.async_api import Page
 
 from src.types.index import Location
-from src.utils.logger import createLogger
+from src.utils.logger import create_logger
 
-logger = createLogger("tool:validation-errors")
+logger = create_logger("tool:validation-errors")
 
 
 class ValidationErrorFinding(TypedDict):
@@ -16,7 +16,7 @@ class ValidationErrorFinding(TypedDict):
     location: Location
 
 
-async def findValidationErrors(page: Page) -> list[ValidationErrorFinding]:
+async def find_validation_errors(page: Page) -> list[ValidationErrorFinding]:
     logger.log("正在检查页面上的表单校验提示……")
     findings = await page.evaluate("""() => {
       const errors = [];

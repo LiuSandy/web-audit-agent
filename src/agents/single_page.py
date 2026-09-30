@@ -10,19 +10,19 @@ from playwright.async_api import async_playwright
 
 from src.auth.auth_manager import AuthenticationManager
 from src.database.database import AppDatabase
-from src.services.llm import getDefaultModel
-from src.tools.broken_images import findBrokenImages
+from src.services.llm import get_default_model
+from src.tools.broken_images import find_broken_images
 from src.tools.console_errors import ConsoleMonitor
-from src.tools.layout_audit import runLayoutAudit
+from src.tools.layout_audit import run_layout_audit
 from src.tools.network_errors import NetworkMonitor
-from src.tools.visual_regression import runVisualRegression
-from src.utils.logger import createLogger
+from src.tools.visual_regression import run_visual_regression
+from src.utils.logger import create_logger
 from src.utils.locale import ACTIONS, STATUSES, display_label
 
-logger = createLogger("agent:single-page")
+logger = create_logger("agent:single-page")
 
 
-def pageOk(p):
+def page_ok(p):
     return p is not None and not p.is_closed()
 
 
@@ -37,43 +37,43 @@ class SinglePageTestingAgent:
         self.playwright = None
         self.config = {"maxTestCases": 20, "strategy": "comprehensive", **config}
         try:
-            self.model = config.get("model") or getDefaultModel()
+            self.model = config.get("model") or get_default_model()
         except Exception:
             self.model = None
-        db = AppDatabase.getInstance()
-        self.authManager = AuthenticationManager(db.getDatabase(), {"storageType": "sqlite"})
+        db = AppDatabase.get_instance()
+        self.auth_manager = AuthenticationManager(db.get_database(), {"storageType": "sqlite"})
         sid = config.get("sessionId") or f"sp-{now_ms()}"
         self.state = {"sessionId": sid, "testPlan": None, "results": [],
                       "currentTestIndex": -1, "status": "planning",
                       "currentAction": "正在初始化……", "lastError": None,
                       "startTime": now_ms()}
         self.stopping = False
-        self.consoleMonitor = None
-        self.networkMonitor = None
+        self.console_monitor = None
+        self.network_monitor = None
 
-    def getState(self):
+    def get_state(self):
         return dict(self.state)
 
     @traceable(name="single_page_test", run_type="chain")
     async def start(self):
         logger.info(f"正在开始单页测试：{self.config['targetUrl']}")
         try:
-            await self.initBrowser()
+            await self.init_browser()
             await self.page.goto(self.config["targetUrl"], wait_until="networkidle")
             auth = self.config.get("auth") or {}
             if auth.get("required"):
                 self.state["currentAction"] = "正在登录……"
                 if auth.get("credentials"):
-                    await self.authManager.storeCredentials(auth["appIdentifier"], auth["credentials"])
-                authRes = await self.authManager.authenticate(self.page, auth["appIdentifier"])
-                if not authRes["success"]:
-                    raise RuntimeError(f"登录失败：{authRes.get('error')}")
+                    await self.auth_manager.store_credentials(auth["appIdentifier"], auth["credentials"])
+                auth_res = await self.auth_manager.authenticate(self.page, auth["appIdentifier"])
+                if not auth_res["success"]:
+                    raise RuntimeError(f"登录失败：{auth_res.get('error')}")
                 await self.page.goto(self.config["targetUrl"], wait_until="networkidle")
                 logger.info("登录成功，已返回目标页面")
             self.state["status"] = "planning"
             self.state["currentAction"] = "正在分析页面……"
-            elements = await self.discoverElements()
-            plan = await self.generateTestPlan(elements)
+            elements = await self.discover_elements()
+            plan = await self.generate_test_plan(elements)
             self.state["testPlan"] = plan
             self.state["currentAction"] = f"已规划 {plan['totalTests']} 个测试"
             logger.info(self.state["currentAction"])
@@ -83,17 +83,17 @@ class SinglePageTestingAgent:
                     break
                 self.state["currentTestIndex"] = i
                 self.state["currentAction"] = f"{tc['id']}: {tc['name']}"
-                result = await self.executeTestCase(tc)
+                result = await self.execute_test_case(tc)
                 self.state["results"].append(result)
                 logger.info(f"{tc['id']}：{display_label(result['status'], STATUSES)}（{result['executionTimeMs']} 毫秒）")
             self.state["status"] = "stopped" if self.stopping else "completed"
             self.state["currentAction"] = "正在检查页面布局……"
-            await self.runLayoutAudit(self.page)
+            await self.run_layout_audit(self.page)
             self.state["currentAction"] = "正在检查视觉差异……"
-            await self.runVisualRegression(self.page)
+            await self.run_visual_regression(self.page)
             self.state["currentAction"] = "已完成"
             self.state["endTime"] = now_ms()
-            return self.getState()
+            return self.get_state()
         except Exception as error:
             self.state["status"] = "failed"
             self.state["lastError"] = str(error)
@@ -105,7 +105,7 @@ class SinglePageTestingAgent:
     def stop(self):
         self.stopping = True
 
-    async def initBrowser(self):
+    async def init_browser(self):
         self.playwright = await async_playwright().start()
         kwargs = {"headless": True}
         if os.environ.get("PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH"):
@@ -113,8 +113,8 @@ class SinglePageTestingAgent:
         self.browser = await self.playwright.chromium.launch(**kwargs)
         ctx = await self.browser.new_context(viewport={"width": 1280, "height": 720})
         self.page = await ctx.new_page()
-        self.consoleMonitor = ConsoleMonitor(self.page)
-        self.networkMonitor = NetworkMonitor(self.page)
+        self.console_monitor = ConsoleMonitor(self.page)
+        self.network_monitor = NetworkMonitor(self.page)
 
     async def cleanup(self):
         try:
@@ -127,8 +127,8 @@ class SinglePageTestingAgent:
         self.page = None
         self.browser = None
 
-    async def discoverElements(self):
-        if not pageOk(self.page):
+    async def discover_elements(self):
+        if not page_ok(self.page):
             return []
         el = await self.page.evaluate("""() => {
             const out = []; const seen = new Set();
@@ -149,18 +149,18 @@ class SinglePageTestingAgent:
         return el
 
     @traceable(name="single_page.plan", run_type="chain")
-    async def generateTestPlan(self, elements):
+    async def generate_test_plan(self, elements):
         url = self.page.url
         title = await self.page.title()
         inputs = [e for e in elements if e["tag"] in ("input", "textarea", "select")]
         buttons = [e for e in elements if e["tag"] in ("button", "a")]
         other = [e for e in elements if e["tag"] not in ("input", "textarea", "select", "button", "a")]
         sys = "你是质量测试规划代理。请为单个网页生成测试计划，只返回有效 JSON，不要 Markdown。测试名称、描述、步骤说明和预期结果使用简体中文；JSON 字段名、枚举值、URL 和 CSS 选择器保持原值。"
-        elementLines = "\n".join(
+        element_lines = "\n".join(
             f"{i + 1}. [{e['tag'].upper()}] {e['selector']} (text: \"{e['text'][:40]}\", type: {e.get('type') or 'N/A'}, visible: {str(e['isVisible']).lower()})"
             for i, e in enumerate(elements[:30]))
         user = (f"页面：{url}\n标题：{title}\n策略：{self.config['strategy']}\n最多测试数：{self.config.get('maxTestCases') or 20}\n\n"
-                f"页面元素：\n{elementLines}\n\n请覆盖表单校验、按钮点击、边界情况、可见错误和控制台错误。\n"
+                f"页面元素：\n{element_lines}\n\n请覆盖表单校验、按钮点击、边界情况、可见错误和控制台错误。\n"
                 "每个用例包含：id（TC###）、中文 name 和 description、priority（critical|high|medium|low）、"
                 "category（form|validation|interaction|navigation|visual）、steps（action、selector、value、中文 description）和中文 expectedOutcome。\n"
                 "步骤 action 只用 click|fill|select|hover|wait|verify|navigate。另包含页面加载、破损图片检查和控制台错误检查。\n"
@@ -171,18 +171,18 @@ class SinglePageTestingAgent:
             parsed = json.loads(cleaned)
             if not isinstance(parsed.get("testCases"), list):
                 raise ValueError("模型未返回 testCases")
-            testCases = parsed["testCases"][:self.config.get("maxTestCases") or 20]
-            return {"pageUrl": url, "pageTitle": title, "totalTests": len(testCases),
-                    "estimatedDurationSeconds": len(testCases) * 8,
+            test_cases = parsed["testCases"][:self.config.get("maxTestCases") or 20]
+            return {"pageUrl": url, "pageTitle": title, "totalTests": len(test_cases),
+                    "estimatedDurationSeconds": len(test_cases) * 8,
                     "coverage": {"forms": len([e for e in inputs if e["tag"] == "form"]),
                                  "buttons": len(buttons), "links": len([e for e in elements if e["tag"] == "a"]),
                                  "inputs": len(inputs), "otherInteractive": len(other)},
-                    "testCases": testCases}
+                    "testCases": test_cases}
         except Exception as error:
             logger.warn(f"模型生成测试计划失败：{error}，改用备用计划")
-            return self.fallbackPlan(url, title, inputs, buttons, elements)
+            return self.fallback_plan(url, title, inputs, buttons, elements)
 
-    def fallbackPlan(self, url, title, inputs, buttons, all):
+    def fallback_plan(self, url, title, inputs, buttons, all):
         cases = [
             {"id": "TC001", "name": "页面正常加载", "description": "页面标题和正文正常显示",
              "priority": "critical", "category": "navigation",
@@ -215,13 +215,13 @@ class SinglePageTestingAgent:
                 "testCases": cases}
 
     @traceable(name="single_page.test_case", run_type="tool")
-    async def executeTestCase(self, tc):
-        if not pageOk(self.page):
+    async def execute_test_case(self, tc):
+        if not page_ok(self.page):
             return {"testCaseId": tc["id"], "status": "error", "executionTimeMs": 0,
                     "stepsExecuted": 0, "errorMessage": "浏览器不可用", "findings": []}
         start = now_ms()
         findings = []
-        stepsExecuted = 0
+        steps_executed = 0
         try:
             try:
                 await self.page.goto(self.config["targetUrl"], wait_until="networkidle")
@@ -231,20 +231,20 @@ class SinglePageTestingAgent:
             for step in tc["steps"]:
                 if self.stopping:
                     return {"testCaseId": tc["id"], "status": "skipped", "executionTimeMs": now_ms() - start,
-                            "stepsExecuted": stepsExecuted, "findings": []}
-                await self.executeStep(step)
-                stepsExecuted += 1
-            findings.extend(await self.validateOutcome(tc))
-            hasErrors = any(f["severity"] in ("critical", "high") for f in findings)
-            return {"testCaseId": tc["id"], "status": "failed" if hasErrors else "passed",
-                    "executionTimeMs": now_ms() - start, "stepsExecuted": stepsExecuted, "findings": findings}
+                            "stepsExecuted": steps_executed, "findings": []}
+                await self.execute_step(step)
+                steps_executed += 1
+            findings.extend(await self.validate_outcome(tc))
+            has_errors = any(f["severity"] in ("critical", "high") for f in findings)
+            return {"testCaseId": tc["id"], "status": "failed" if has_errors else "passed",
+                    "executionTimeMs": now_ms() - start, "stepsExecuted": steps_executed, "findings": findings}
         except Exception as error:
             findings.append({"type": "bug", "description": f"测试执行错误：{error}",
                              "url": self.page.url, "severity": "high", "metadata": {"testCase": tc["id"]}})
             return {"testCaseId": tc["id"], "status": "error", "executionTimeMs": now_ms() - start,
-                    "stepsExecuted": stepsExecuted, "errorMessage": f"测试执行失败：{error}", "findings": findings}
+                    "stepsExecuted": steps_executed, "errorMessage": f"测试执行失败：{error}", "findings": findings}
 
-    async def executeStep(self, step):
+    async def execute_step(self, step):
         p = self.page
         sel = step.get("selector") or ""
         logger.info(f"{display_label(step['action'], ACTIONS)}：{sel}")
@@ -279,39 +279,39 @@ class SinglePageTestingAgent:
             except Exception:
                 pass
 
-    async def validateOutcome(self, tc):
+    async def validate_outcome(self, tc):
         findings = []
-        if not pageOk(self.page):
+        if not page_ok(self.page):
             return findings
         url = self.page.url
-        for err in self.consoleMonitor.getErrors() if self.consoleMonitor else []:
-            rawMessage = err.get("message") or str(err)
-            findings.append({"type": "console_error", "description": f"控制台错误：{rawMessage}",
-                             "severity": "medium", "url": url, "metadata": {"rawMessage": rawMessage}})
-        for err in self.networkMonitor.getErrors() if self.networkMonitor else []:
-            rawMessage = err.get("statusText") or err.get("url") or str(err)
-            findings.append({"type": "network_error", "description": f"网络请求异常：{rawMessage}",
-                             "severity": "medium", "url": url, "metadata": {"rawMessage": rawMessage}})
-        broken = await findBrokenImages(self.page)
+        for err in self.console_monitor.get_errors() if self.console_monitor else []:
+            raw_message = err.get("message") or str(err)
+            findings.append({"type": "console_error", "description": f"控制台错误：{raw_message}",
+                             "severity": "medium", "url": url, "metadata": {"rawMessage": raw_message}})
+        for err in self.network_monitor.get_errors() if self.network_monitor else []:
+            raw_message = err.get("statusText") or err.get("url") or str(err)
+            findings.append({"type": "network_error", "description": f"网络请求异常：{raw_message}",
+                             "severity": "medium", "url": url, "metadata": {"rawMessage": raw_message}})
+        broken = await find_broken_images(self.page)
         for img in broken:
             findings.append({"type": "broken_image", "description": f"图片加载异常：{img['src']}",
                              "severity": "low", "url": url, "selector": img["selector"]})
-        hasVisibleError = await self.page.evaluate("""() => {
+        has_visible_error = await self.page.evaluate("""() => {
             const els = document.querySelectorAll('[role="alert"], [class*="error"], [class*="toast"]');
             return Array.from(els).some(el => el.offsetWidth > 0 && el.textContent?.trim().length > 0);
         }""")
-        if hasVisibleError:
+        if has_visible_error:
             findings.append({"type": "validation_error", "description": f'执行“{tc["name"]}”后出现可见错误提示',
                              "severity": "high", "url": url})
         return findings
 
-    async def runLayoutAudit(self, page):
+    async def run_layout_audit(self, page):
         config = self.config.get("layoutAudit") or {}
         if config.get("enabled") is False:
             return
         try:
             self.state["currentAction"] = "正在检查页面布局……"
-            findings = await runLayoutAudit(page, {"maxElements": config.get("maxElements", 300),
+            findings = await run_layout_audit(page, {"maxElements": config.get("maxElements", 300),
                                                    "heuristics": config.get("heuristics"),
                                                    "screenshots": config.get("screenshots"),
                                                    "sessionId": self.state["sessionId"]})
@@ -326,13 +326,13 @@ class SinglePageTestingAgent:
         except Exception as error:
             logger.warn("页面布局检查失败：", error)
 
-    async def runVisualRegression(self, page):
+    async def run_visual_regression(self, page):
         config = self.config.get("visualRegression") or {}
         if config.get("enabled") is not True:
             return
         try:
             self.state["currentAction"] = "正在检查视觉差异……"
-            vrConfig = {"enabled": True,
+            vr_config = {"enabled": True,
                 "baselineDir": config.get("baselineDir") or "./test-results/baselines",
                 "currentDir": config.get("currentDir") or "./test-results/current",
                 "diffDir": config.get("diffDir") or "./test-results/diffs",
@@ -344,7 +344,7 @@ class SinglePageTestingAgent:
                 "pixelmatchThreshold": config.get("pixelmatchThreshold", 0.1),
                 "captureFullPage": config.get("captureFullPage", True),
                 "generateDiffImages": config.get("generateDiffImages", True)}
-            results = await runVisualRegression(page, self.config["targetUrl"], vrConfig)
+            results = await run_visual_regression(page, self.config["targetUrl"], vr_config)
             for result in results:
                 viewport = result["viewport"]
                 findings = []

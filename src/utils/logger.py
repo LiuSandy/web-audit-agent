@@ -2,12 +2,12 @@
 
 import logging
 
-isVerbose = False
+is_verbose = False
 
 
-def setVerbose(verbose: bool) -> None:
-    global isVerbose
-    isVerbose = verbose
+def set_verbose(verbose: bool) -> None:
+    global is_verbose
+    is_verbose = verbose
 
 
 class _NamespaceLogger:
@@ -19,11 +19,11 @@ class _NamespaceLogger:
             self.base.addHandler(logging.StreamHandler())
 
     def log(self, *args: object) -> None:
-        if isVerbose:
+        if is_verbose:
             self.base.info(" ".join(map(str, args)))
 
     def info(self, *args: object) -> None:
-        if isVerbose:
+        if is_verbose:
             self.base.info(" ".join(map(str, args)))
 
     def warn(self, *args: object) -> None:
@@ -36,8 +36,8 @@ class _NamespaceLogger:
         self.base.info(" ".join(map(str, args)))
 
 
-def createLogger(namespace: str) -> _NamespaceLogger:
+def create_logger(namespace: str) -> _NamespaceLogger:
     return _NamespaceLogger(namespace)
 
 
-logger = createLogger("global")
+logger = create_logger("global")

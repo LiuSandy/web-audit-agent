@@ -12,24 +12,24 @@ from playwright.async_api import async_playwright
 from src.auth.auth_manager import AuthenticationManager
 from src.database.database import AppDatabase
 from src.repositories.session_repository import SessionRepository
-from src.services.llm import getDefaultModel
+from src.services.llm import get_default_model
 from src.services.test_executor import TestExecutor
 from src.services.test_generator import TestGenerator
-from src.tools.broken_images import findBrokenImages
+from src.tools.broken_images import find_broken_images
 from src.tools.console_errors import ConsoleMonitor
-from src.tools.crawler import crawlSite
+from src.tools.crawler import crawl_site
 from src.tools.network_errors import NetworkMonitor
-from src.tools.validation_errors import findValidationErrors
+from src.tools.validation_errors import find_validation_errors
 from src.types.index import OrderedSet
-from src.utils.logger import createLogger
+from src.utils.logger import create_logger
 from src.utils.locale import BROKEN_IMAGE_REASONS, display_label
 
-logger = createLogger("agent:exploratory")
+logger = create_logger("agent:exploratory")
 
 
-def buildStepMetadata(sessionId, state, url):
+def build_step_metadata(session_id, state, url):
     """Builds LangSmith metadata describing one agent step."""
-    return {"sessionId": sessionId or "", "step": state["steps"], "url": url,
+    return {"sessionId": session_id or "", "step": state["steps"], "url": url,
             "visitedCount": len(state["visitedUrls"]), "queueLength": len(state["todoQueue"])}
 
 _SNAPSHOT_CALLBACK = r'''
@@ -117,35 +117,35 @@ class ExploratoryAgent:
         self.browser = None
         self.page = None
         self.playwright = None
-        self.consoleMonitor = None
-        self.networkMonitor = None
+        self.console_monitor = None
+        self.network_monitor = None
         self.config = config
-        self.model = config.get("model") or getDefaultModel()
-        self.db = AppDatabase.getInstance()
-        database = self.db.getDatabase()
-        self.sessionRepo = SessionRepository(database)
-        self.authManager = AuthenticationManager(database, {"storageType": "sqlite"})
+        self.model = config.get("model") or get_default_model()
+        self.db = AppDatabase.get_instance()
+        database = self.db.get_database()
+        self.session_repo = SessionRepository(database)
+        self.auth_manager = AuthenticationManager(database, {"storageType": "sqlite"})
         self.state = {"visitedUrls": OrderedSet(), "findings": [], "steps": 0,
                       "history": [], "todoQueue": []}
-        self.testGenerator = None
-        self.testExecutor = None
+        self.test_generator = None
+        self.test_executor = None
         if config.get("enableTestGeneration"):
-            testConfig = {"outputDir": config.get("testOutputDir") or "./generated-tests",
+            test_config = {"outputDir": config.get("testOutputDir") or "./generated-tests",
                           "includeE2E": config.get("includeE2ETests") is not False}
-            self.testGenerator = TestGenerator(self.model, testConfig)
-            executionConfig = {"dryRun": config.get("testDryRun") or False,
+            self.test_generator = TestGenerator(self.model, test_config)
+            execution_config = {"dryRun": config.get("testDryRun") or False,
                 "parallel": config.get("testParallelExecution") or False,
                 "maxConcurrency": config.get("testMaxConcurrency") or 4,
                 "timeout": config.get("testTimeout") or 30000,
                 "retryCount": config.get("testRetryCount") or 2}
-            self.testExecutor = TestExecutor(executionConfig)
+            self.test_executor = TestExecutor(execution_config)
 
     async def start(self):
         logger.log("正在启动探索测试代理……")
         if self.config.get("sessionId"):
-            loadedState = self.sessionRepo.loadState(self.config["sessionId"])
-            if loadedState:
-                self.state = loadedState
+            loaded_state = self.session_repo.load_state(self.config["sessionId"])
+            if loaded_state:
+                self.state = loaded_state
                 logger.info(f"已恢复会话 {self.config['sessionId']}，当前为第 {self.state['steps']} 步")
             else:
                 logger.info(f"未找到会话 {self.config['sessionId']} 的状态，开始新测试")
@@ -153,33 +153,33 @@ class ExploratoryAgent:
         self.browser = await self.playwright.chromium.launch(
             headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
         self.page = await self.browser.new_page()
-        self.consoleMonitor = ConsoleMonitor(self.page)
-        self.networkMonitor = NetworkMonitor(self.page)
+        self.console_monitor = ConsoleMonitor(self.page)
+        self.network_monitor = NetworkMonitor(self.page)
         logger.log("控制台与网络监视器已启动")
         if self.state["steps"] == 0:
             logger.log("正在预先发现页面……")
-            discoveredUrls = await crawlSite(self.page, self.config["baseUrl"])
-            self.state["todoQueue"] = list(discoveredUrls)
-            logger.log(f"已将发现的 {len(discoveredUrls)} 个页面加入待办队列")
+            discovered_urls = await crawl_site(self.page, self.config["baseUrl"])
+            self.state["todoQueue"] = list(discovered_urls)
+            logger.log(f"已将发现的 {len(discovered_urls)} 个页面加入待办队列")
             auth = self.config.get("auth") or {}
             if auth.get("required"):
                 if auth.get("credentials"):
-                    await self.authManager.storeCredentials(auth["appIdentifier"], auth["credentials"])
+                    await self.auth_manager.store_credentials(auth["appIdentifier"], auth["credentials"])
                     logger.log("已保存或更新本次会话的凭据")
                 logger.log("目标网站需要登录，正在尝试登录……")
-                authRes = await self.authManager.authenticate(self.page, auth["appIdentifier"])
-                if authRes["success"]:
-                    logger.log(f"✓ 已通过 {authRes['method']} 登录")
+                auth_res = await self.auth_manager.authenticate(self.page, auth["appIdentifier"])
+                if auth_res["success"]:
+                    logger.log(f"✓ 已通过 {auth_res['method']} 登录")
                 else:
-                    logger.error(f"✗ 登录失败：{authRes.get('error')}")
-                    raise RuntimeError(f"登录失败：{authRes.get('error')}")
+                    logger.error(f"✗ 登录失败：{auth_res.get('error')}")
+                    raise RuntimeError(f"登录失败：{auth_res.get('error')}")
             await self.page.goto(self.config["baseUrl"])
             logger.log(f"已访问 {self.config['baseUrl']}")
         else:
-            lastUrl = self.state["history"][-1].get("url") if self.state["history"] else None
-            if lastUrl:
-                await self.page.goto(lastUrl)
-                logger.log(f"已从 {lastUrl} 恢复访问")
+            last_url = self.state["history"][-1].get("url") if self.state["history"] else None
+            if last_url:
+                await self.page.goto(last_url)
+                logger.log(f"已从 {last_url} 恢复访问")
             else:
                 await self.page.goto(self.config["baseUrl"])
 
@@ -199,70 +199,70 @@ class ExploratoryAgent:
         self.state["steps"] += 1
         url = self.page.url
         self.state["visitedUrls"].add(url)
-        metadata = buildStepMetadata(self.config.get("sessionId"), self.state, url)
+        metadata = build_step_metadata(self.config.get("sessionId"), self.state, url)
         return await self._step(guidance, url, langsmith_extra={"metadata": metadata})
 
     @traceable(name="agent.step", run_type="chain")
     async def _step(self, guidance=None, url=None):
         title = await self.page.title()
-        visitedList = list(self.state["visitedUrls"])
-        snapshot = await self.page.evaluate(_SNAPSHOT_CALLBACK, visitedList)
+        visited_list = list(self.state["visitedUrls"])
+        snapshot = await self.page.evaluate(_SNAPSHOT_CALLBACK, visited_list)
         history = self.state["history"]
-        historySlice = history[-3:]
-        historyStartIndex = max(0, len(history) - 3)
-        recentHistory = "\n".join(
-            f"第 {historyStartIndex + i + 1} 步：{h['action']}（原因：{h['reason']}）→ 结果：{h.get('result') or '无'}"
-            for i, h in enumerate(historySlice))
-        systemPrompt = (_SYSTEM_PROMPT
+        history_slice = history[-3:]
+        history_start_index = max(0, len(history) - 3)
+        recent_history = "\n".join(
+            f"第 {history_start_index + i + 1} 步：{h['action']}（原因：{h['reason']}）→ 结果：{h.get('result') or '无'}"
+            for i, h in enumerate(history_slice))
+        system_prompt = (_SYSTEM_PROMPT
             .replace("${\n            this.config.baseUrl\n        }", self.config["baseUrl"])
             .replace("${this.config.baseUrl}", self.config["baseUrl"])
             .replace("${url}", url).replace("${title}", title)
             .replace("${this.state.visitedUrls.size}", str(len(self.state["visitedUrls"])))
             .replace("${JSON.stringify(this.state.todoQueue)}", json.dumps(self.state["todoQueue"], separators=(",", ":")))
-            .replace('${recentHistory || "None"}', recentHistory or "None"))
-        stepsOnCurrentUrl = 0
-        for historyStep in reversed(history):
-            if historyStep and historyStep["url"] == url:
-                stepsOnCurrentUrl += 1
+            .replace('${recentHistory || "None"}', recent_history or "None"))
+        steps_on_current_url = 0
+        for history_step in reversed(history):
+            if history_step and history_step["url"] == url:
+                steps_on_current_url += 1
             else:
                 break
-        last3Steps = history[-3:]
-        firstOfLast3 = last3Steps[0] if last3Steps else None
-        isRepeatingAction = len(last3Steps) == 3 and firstOfLast3 and all(
-            s["action"] == firstOfLast3["action"] and
-            json.dumps(s.get("params"), separators=(",", ":")) == json.dumps(firstOfLast3.get("params"), separators=(",", ":"))
-            for s in last3Steps)
-        recentFindings = len([f for f in self.state["findings"] if f["url"] == url])
-        if isRepeatingAction:
-            systemPrompt += "\n\n### 检测到重复操作 ###\n你连续三次执行了完全相同的操作。请选择其他元素、访问新页面，或在无法继续时调用 finish()。"
-        elif stepsOnCurrentUrl > 10 and recentFindings == 0:
-            uniqueInteractions = len({s["action"] + json.dumps(s.get("params"), separators=(",", ":"))
-                                      for s in history[-stepsOnCurrentUrl:]})
-            if uniqueInteractions < stepsOnCurrentUrl * 0.5:
-                systemPrompt += f"\n\n### 检测到停滞 ###\n你已在当前页面重复操作 {stepsOnCurrentUrl} 步。如不能立即发现具体新问题，请访问其他页面或结束。"
+        last3_steps = history[-3:]
+        first_of_last3 = last3_steps[0] if last3_steps else None
+        is_repeating_action = len(last3_steps) == 3 and first_of_last3 and all(
+            s["action"] == first_of_last3["action"] and
+            json.dumps(s.get("params"), separators=(",", ":")) == json.dumps(first_of_last3.get("params"), separators=(",", ":"))
+            for s in last3_steps)
+        recent_findings = len([f for f in self.state["findings"] if f["url"] == url])
+        if is_repeating_action:
+            system_prompt += "\n\n### 检测到重复操作 ###\n你连续三次执行了完全相同的操作。请选择其他元素、访问新页面，或在无法继续时调用 finish()。"
+        elif steps_on_current_url > 10 and recent_findings == 0:
+            unique_interactions = len({s["action"] + json.dumps(s.get("params"), separators=(",", ":"))
+                                      for s in history[-steps_on_current_url:]})
+            if unique_interactions < steps_on_current_url * 0.5:
+                system_prompt += f"\n\n### 检测到停滞 ###\n你已在当前页面重复操作 {steps_on_current_url} 步。如不能立即发现具体新问题，请访问其他页面或结束。"
         if not self.state["todoQueue"]:
-            systemPrompt += "\n\n### 待办队列为空 ###\n可发现页面已经探索完毕。除非当前页面还有明确的测试目标，否则下一步调用 finish()。"
+            system_prompt += "\n\n### 待办队列为空 ###\n可发现页面已经探索完毕。除非当前页面还有明确的测试目标，否则下一步调用 finish()。"
         if guidance:
-            systemPrompt += f'\n\n### 用户指导 ###\n请优先遵循："{guidance}"'
-        userMessage = f"\n当前页面元素（简化）：\n{json.dumps(snapshot, indent=2, ensure_ascii=False)}\n\n下一步做什么？只返回原始 JSON 对象。\n    "
-        timeoutMs = 30000
-        maxRetries = 3
+            system_prompt += f'\n\n### 用户指导 ###\n请优先遵循："{guidance}"'
+        user_message = f"\n当前页面元素（简化）：\n{json.dumps(snapshot, indent=2, ensure_ascii=False)}\n\n下一步做什么？只返回原始 JSON 对象。\n    "
+        timeout_ms = 30000
+        max_retries = 3
         response = None
-        for attempt in range(1, maxRetries + 1):
+        for attempt in range(1, max_retries + 1):
             try:
                 response = await asyncio.wait_for(self.model.ainvoke([
-                    SystemMessage(content=systemPrompt), HumanMessage(content=userMessage)]),
-                    timeout=timeoutMs / 1000)
+                    SystemMessage(content=system_prompt), HumanMessage(content=user_message)]),
+                    timeout=timeout_ms / 1000)
                 break
             except Exception as error:
-                isRateLimit = "429" in str(error) or getattr(error, "status", None) == 429
-                if isRateLimit and attempt < maxRetries:
-                    waitTime = 2 ** attempt * 2000
-                    logger.warn(f"触发模型请求限流，等待 {waitTime} 毫秒……")
-                    await asyncio.sleep(waitTime / 1000)
+                is_rate_limit = "429" in str(error) or getattr(error, "status", None) == 429
+                if is_rate_limit and attempt < max_retries:
+                    wait_time = 2 ** attempt * 2000
+                    logger.warn(f"触发模型请求限流，等待 {wait_time} 毫秒……")
+                    await asyncio.sleep(wait_time / 1000)
                     continue
                 logger.error(f"模型调用失败（第 {attempt} 次尝试）：{error}")
-                if attempt == maxRetries:
+                if attempt == max_retries:
                     return {"action": "error", "reason": f"模型调用失败：{error}", "completed": False}
         content = response.content if isinstance(response.content, str) else json.dumps(response.content)
         try:
@@ -273,48 +273,48 @@ class ExploratoryAgent:
             return {"action": "error", "reason": "模型返回的 JSON 无效", "completed": False}
         logger.log(f"代理决策：{parsed.get('reason')}")
         logger.log(f"执行操作：{parsed.get('action')} {json.dumps(parsed.get('params'), ensure_ascii=False) if parsed.get('params') else ''}")
-        await self.executeAction(parsed["action"], parsed.get("params"))
+        await self.execute_action(parsed["action"], parsed.get("params"))
         self.state["history"].append({"action": parsed["action"], "reason": parsed["reason"],
                                       "url": self.page.url, "params": parsed.get("params")})
         stats = {"currentUrl": self.page.url, "queueLength": len(self.state["todoQueue"]),
                  "visitedCount": len(self.state["visitedUrls"]), "findingsCount": len(self.state["findings"])}
         if self.config.get("sessionId"):
-            self.sessionRepo.saveState(self.config["sessionId"], self.state)
+            self.session_repo.save_state(self.config["sessionId"], self.state)
         return {"action": parsed["action"], "reason": parsed["reason"],
                 "completed": parsed["action"] == "finish", "stats": stats}
 
     @traceable(name="execute_action", run_type="tool")
-    async def executeAction(self, action, params):
+    async def execute_action(self, action, params):
         if not self.page:
             return None
         try:
             if action == "add_to_queue":
-                newUrls = params if isinstance(params, list) else [params] if isinstance(params, str) else (params or {}).get("urls", [])
-                addedCount = 0
-                baseHostname = urlparse(self.config["baseUrl"]).hostname
-                for u in newUrls:
+                new_urls = params if isinstance(params, list) else [params] if isinstance(params, str) else (params or {}).get("urls", [])
+                added_count = 0
+                base_hostname = urlparse(self.config["baseUrl"]).hostname
+                for u in new_urls:
                     try:
-                        absoluteUrl = urljoin(self.page.url, u)
-                        if urlparse(absoluteUrl).hostname != baseHostname:
+                        absolute_url = urljoin(self.page.url, u)
+                        if urlparse(absolute_url).hostname != base_hostname:
                             continue
-                        if absoluteUrl not in self.state["visitedUrls"] and absoluteUrl not in self.state["todoQueue"]:
-                            self.state["todoQueue"].append(absoluteUrl)
-                            addedCount += 1
+                        if absolute_url not in self.state["visitedUrls"] and absolute_url not in self.state["todoQueue"]:
+                            self.state["todoQueue"].append(absolute_url)
+                            added_count += 1
                     except Exception:
                         pass
-                msg = f"已将 {addedCount} 个新页面加入待办队列。"
+                msg = f"已将 {added_count} 个新页面加入待办队列。"
                 logger.log(msg)
                 return msg
             if action == "navigate":
-                targetUrl = params if isinstance(params, str) else (params or {}).get("url")
-                if not targetUrl or not isinstance(targetUrl, str):
+                target_url = params if isinstance(params, str) else (params or {}).get("url")
+                if not target_url or not isinstance(target_url, str):
                     err = f"访问失败：URL 参数无效。收到的参数：{json.dumps(params, ensure_ascii=False)}"
                     logger.error(err)
                     return err
-                logger.log(f"正在访问：{targetUrl}")
-                self.state["todoQueue"] = [u for u in self.state["todoQueue"] if u != targetUrl]
-                await self.page.goto(targetUrl)
-                return f"已访问 {targetUrl}"
+                logger.log(f"正在访问：{target_url}")
+                self.state["todoQueue"] = [u for u in self.state["todoQueue"] if u != target_url]
+                await self.page.goto(target_url)
+                return f"已访问 {target_url}"
             if action == "click":
                 selector = params if isinstance(params, str) else (params or {}).get("selector")
                 if not selector:
@@ -330,19 +330,19 @@ class ExploratoryAgent:
                 return f"已填写 {params['selector']}"
             if action == "find_broken_images":
                 self.state["visitedUrls"].add(self.page.url)
-                findings = await findBrokenImages(self.page)
-                brokenImgScreenshot = await self.takeScreenshot("broken-images") if findings else ""
+                findings = await find_broken_images(self.page)
+                broken_img_screenshot = await self.take_screenshot("broken-images") if findings else ""
                 for f in findings:
-                    self.recordUniqueFinding({"type": "broken_image",
+                    self.record_unique_finding({"type": "broken_image",
                         "description": f"图片加载异常：{f['src']}（原因：{display_label(f['reason'], BROKEN_IMAGE_REASONS)}）",
                         "url": self.page.url, "selector": f["selector"],
-                        "severity": "medium", "screenshot": brokenImgScreenshot})
+                        "severity": "medium", "screenshot": broken_img_screenshot})
                 return f"发现 {len(findings)} 张加载异常的图片"
             if action == "record_finding":
-                bugScreenshot = await self.takeScreenshot("bug")
-                self.recordUniqueFinding({"type": params.get("type") or "bug",
+                bug_screenshot = await self.take_screenshot("bug")
+                self.record_unique_finding({"type": params.get("type") or "bug",
                     "description": params["description"], "url": self.page.url,
-                    "severity": params.get("severity") or "medium", "screenshot": bugScreenshot})
+                    "severity": params.get("severity") or "medium", "screenshot": bug_screenshot})
                 return f"已记录问题：{params['description']}"
             if action == "finish":
                 logger.log("模型决定结束探索")
@@ -354,38 +354,38 @@ class ExploratoryAgent:
             return f"执行操作失败：{error}"
         finally:
             if action in ("navigate", "click", "fill_form"):
-                await self.performAutomaticBugScanning()
+                await self.perform_automatic_bug_scanning()
 
     @traceable(name="automatic_bug_scanning", run_type="tool")
-    async def performAutomaticBugScanning(self):
+    async def perform_automatic_bug_scanning(self):
         if not self.page:
             return
         try:
             await self.page.wait_for_timeout(500)
-            if self.consoleMonitor:
-                for error in self.consoleMonitor.getErrors():
-                    self.recordUniqueFinding({"type": "console_error",
+            if self.console_monitor:
+                for error in self.console_monitor.get_errors():
+                    self.record_unique_finding({"type": "console_error",
                         "description": f"控制台{'错误' if error['type'] == 'error' else '警告'}：{error['message']}",
                         "url": error["url"], "severity": "medium" if error["type"] == "error" else "low",
                         "metadata": {"timestamp": error["timestamp"], "stackTrace": error.get("stackTrace")}})
-            if self.networkMonitor:
-                for error in self.networkMonitor.getErrors():
+            if self.network_monitor:
+                for error in self.network_monitor.get_errors():
                     severity = "high" if error["status"] >= 500 else "medium" if error["status"] >= 400 else "low"
-                    self.recordUniqueFinding({"type": "network_error",
+                    self.record_unique_finding({"type": "network_error",
                         "description": f"网络请求异常：{error['status']} {error['method']} {error['url']}",
                         "url": error["pageUrl"], "severity": severity,
                         "metadata": {"requestUrl": error["url"], "method": error["method"],
                                      "status": error["status"], "statusText": error["statusText"],
                                      "responseBody": error.get("responseBody")}})
-            for error in await findValidationErrors(self.page):
-                self.recordUniqueFinding({"type": "validation_error",
+            for error in await find_validation_errors(self.page):
+                self.record_unique_finding({"type": "validation_error",
                     "description": f"表单校验提示：{error['message']}",
                     "url": self.page.url, "selector": error["selector"], "severity": "low",
                     "metadata": {"location": error.get("location")}})
         except Exception as error:
             logger.warn(f"自动问题扫描失败：{error}")
 
-    async def takeScreenshot(self, prefix):
+    async def take_screenshot(self, prefix):
         if not self.page:
             return ""
         timestamp = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z").replace(":", "-").replace(".", "-")
@@ -398,46 +398,46 @@ class ExploratoryAgent:
             logger.warn(f"截图失败，已跳过：{error}")
             return ""
 
-    def recordUniqueFinding(self, finding):
-        existingFinding = next((f for f in self.state["findings"]
+    def record_unique_finding(self, finding):
+        existing_finding = next((f for f in self.state["findings"]
             if f["type"] == finding["type"] and f["description"] == finding["description"]
             and f.get("selector") == finding.get("selector")), None)
-        if existingFinding:
-            existingFinding["count"] = (existingFinding.get("count") or 1) + 1
-            if not existingFinding.get("occurrences"):
-                existingFinding["occurrences"] = []
-            if finding["url"] not in existingFinding["occurrences"] and existingFinding["url"] != finding["url"]:
-                existingFinding["occurrences"].append(finding["url"])
-            logger.info(f"已合并重复问题：{finding['description']}（累计 {existingFinding['count']} 次）")
+        if existing_finding:
+            existing_finding["count"] = (existing_finding.get("count") or 1) + 1
+            if not existing_finding.get("occurrences"):
+                existing_finding["occurrences"] = []
+            if finding["url"] not in existing_finding["occurrences"] and existing_finding["url"] != finding["url"]:
+                existing_finding["occurrences"].append(finding["url"])
+            logger.info(f"已合并重复问题：{finding['description']}（累计 {existing_finding['count']} 次）")
         else:
             finding["count"] = 1
             self.state["findings"].append(finding)
             logger.info(f"已记录新问题：{finding['description']}")
 
-    def getFindings(self):
+    def get_findings(self):
         return self.state["findings"]
 
-    def getVisitedUrls(self):
+    def get_visited_urls(self):
         return list(self.state["visitedUrls"])
 
     @traceable(name="agent.generate_tests", run_type="chain")
-    async def generateTests(self):
-        if not self.testGenerator:
+    async def generate_tests(self):
+        if not self.test_generator:
             logger.warn("未启用测试生成")
             return []
         logger.info(f"正在根据 {len(self.state['findings'])} 条发现生成测试")
         try:
-            generatedTests = await self.testGenerator.generateTestsFromFindings(
+            generated_tests = await self.test_generator.generate_tests_from_findings(
                 self.state["findings"], self.state, self.config["baseUrl"])
-            if self.testExecutor:
-                savedFiles = await self.testExecutor.saveTests(generatedTests)
-                logger.info(f"已保存 {len(savedFiles)} 个测试文件")
-                results = await self.testExecutor.executeTests(generatedTests)
+            if self.test_executor:
+                saved_files = await self.test_executor.save_tests(generated_tests)
+                logger.info(f"已保存 {len(saved_files)} 个测试文件")
+                results = await self.test_executor.execute_tests(generated_tests)
                 logger.info(f"已执行 {len(results)} 个测试")
                 timestamp = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z").replace(":", "-").replace(".", "-")
-                reportPath = f"reports/test-execution-{timestamp}.md"
-                await self.testExecutor.saveTestReport(results, reportPath)
-            return generatedTests
+                report_path = f"reports/test-execution-{timestamp}.md"
+                await self.test_executor.save_test_report(results, report_path)
+            return generated_tests
         except Exception as error:
             logger.error("生成测试失败：", error)
             return []

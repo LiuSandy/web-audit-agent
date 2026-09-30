@@ -57,5 +57,5 @@ class ListSessionsResult(TypedDict):
     total: int
 
 
-def toTextContent(data):
+def to_text_content(data):
     return [{"type": "text", "text": json.dumps(data, ensure_ascii=False, indent=2)}]

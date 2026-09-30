@@ -56,7 +56,7 @@ single_page_test                ← 整个单页测试会话
 
 ## metadata 字段对照
 
-`agent.step` 每条 trace 携带以下 metadata（由 `src/agents/exploratory.py` 的 `buildStepMetadata` 生成）：
+`agent.step` 每条 trace 携带以下 metadata（由 `src/agents/exploratory.py` 的 `build_step_metadata` 生成；键名为 LangSmith metadata 契约，保持 camelCase）：
 
 | 字段 | 含义 |
 |------|------|

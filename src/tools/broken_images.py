@@ -3,12 +3,12 @@
 from playwright.async_api import Page
 
 from src.types.index import BrokenImageFinding
-from src.utils.logger import createLogger
+from src.utils.logger import create_logger
 
-logger = createLogger("tool:broken-images")
+logger = create_logger("tool:broken-images")
 
 
-async def findBrokenImages(page: Page) -> list[BrokenImageFinding]:
+async def find_broken_images(page: Page) -> list[BrokenImageFinding]:
     logger.log("正在检查页面中的破损图片……")
     findings = await page.evaluate("""async () => {
       const getSelector = (el) => {

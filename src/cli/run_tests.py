@@ -7,7 +7,7 @@ from pathlib import Path
 import questionary
 
 
-def showHelp():
+def show_help():
     print("""
 📚 Python Playwright 常用命令：
 
@@ -25,7 +25,7 @@ uv run pytest -v -s generated-tests/
 """)
 
 
-def runAllTests():
+def run_all_tests():
     print("🚀 正在运行全部生成的测试……")
     print("执行命令：python -m pytest generated-tests/")
     code = subprocess.call([sys.executable, "-m", "pytest", "-o", "python_files=*_spec.py", "generated-tests/"])
@@ -45,9 +45,9 @@ async def main():
         questionary.Choice("🚀 运行全部测试", value="all"),
         questionary.Choice("📋 查看命令", value="help")]).ask_async()
     if choice == "help":
-        showHelp()
+        show_help()
         return
-    runAllTests()
+    run_all_tests()
 
 
 if __name__ == "__main__":

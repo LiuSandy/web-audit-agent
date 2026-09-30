@@ -21,7 +21,7 @@ uv run python -m src.cli.run_tests   # Run saved generated E2E tests
 
 ## Coding Style & Naming Conventions
 
-Use four-space indentation and follow the surrounding Python style. Ruff enforces selected `E4`, `E7`, `E9`, and `F` rules; run it before submitting changes. Module files use PEP 8 snake_case names and are imported with normal `import` statements. Public camelCase names such as `findBrokenImages` are intentional; retain those names for compatibility.
+Use four-space indentation and follow the surrounding Python style. Ruff enforces selected `E4`, `E7`, `E9`, and `F` rules; run it before submitting changes. Module files use PEP 8 snake_case names and are imported with normal `import` statements. All functions, variables, and methods follow PEP 8: snake_case for identifiers, PascalCase for classes. Dict and JSON keys (MCP schemas, state payloads, LangSmith metadata) are intentionally kept in camelCase for protocol compatibility.
 
 ## Testing Guidelines
 

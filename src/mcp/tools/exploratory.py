@@ -8,85 +8,85 @@ from urllib.parse import urlparse
 
 from src.agents.exploratory import ExploratoryAgent
 from src.database.database import AppDatabase
-from src.services.llm import getDefaultModel
-from src.utils.logger import createLogger
+from src.services.llm import get_default_model
+from src.utils.logger import create_logger
 from src.utils.locale import ACTIONS, display_label
 
-from src.mcp.types import toTextContent
+from src.mcp.types import to_text_content
 
-logger = createLogger("mcp:exploratory")
-agentInstances = {}
-backgroundTasks = set()
-
-
-def _activeTests():
-    return importlib.import_module("src.mcp.server").activeTests
+logger = create_logger("mcp:exploratory")
+agent_instances = {}
+background_tasks = set()
 
 
-async def handleRunExploratoryTest(args):
-    baseUrl = str(args.get("baseUrl", "")).strip()
-    parsed = urlparse(baseUrl)
-    if not baseUrl or not parsed.scheme or not parsed.netloc:
+def _active_tests():
+    return importlib.import_module("src.mcp.server").active_tests
+
+
+async def handle_run_exploratory_test(args):
+    base_url = str(args.get("baseUrl", "")).strip()
+    parsed = urlparse(base_url)
+    if not base_url or not parsed.scheme or not parsed.netloc:
         raise ValueError(f'无效的 baseUrl："{args.get("baseUrl")}"')
-    maxSteps = args.get("maxSteps") if isinstance(args.get("maxSteps"), (int, float)) else 50
-    testSessionId = args.get("sessionId", "").strip() if isinstance(args.get("sessionId"), str) and args["sessionId"].strip() else f"exp-{int(time.time() * 1000)}"
-    authConfig = None
+    max_steps = args.get("maxSteps") if isinstance(args.get("maxSteps"), (int, float)) else 50
+    test_session_id = args.get("sessionId", "").strip() if isinstance(args.get("sessionId"), str) and args["sessionId"].strip() else f"exp-{int(time.time() * 1000)}"
+    auth_config = None
     if args.get("authRequired"):
         email = (args.get("authEmail") or "").strip()
         password = (args.get("authPassword") or "").strip()
-        appId = (args.get("authAppIdentifier") or "").strip() or "mcp-test"
+        app_id = (args.get("authAppIdentifier") or "").strip() or "mcp-test"
         if not email or not password:
             raise ValueError("authRequired 为 true，但缺少 authEmail 或 authPassword")
-        authConfig = {"required": True, "appIdentifier": appId,
+        auth_config = {"required": True, "appIdentifier": app_id,
                       "credentials": {"email": email, "password": password}}
-        logger.info(f"会话 {testSessionId} 已配置登录凭据，应用标识：{appId}")
-    _activeTests()[testSessionId] = {"sessionId": testSessionId, "baseUrl": baseUrl,
+        logger.info(f"会话 {test_session_id} 已配置登录凭据，应用标识：{app_id}")
+    _active_tests()[test_session_id] = {"sessionId": test_session_id, "baseUrl": base_url,
         "status": "pending", "startTime": datetime.now(timezone.utc),
         "findingsCount": 0, "visitedUrlsCount": 0, "progress": 0}
-    db = AppDatabase.getInstance()
-    model = getDefaultModel()
-    task = asyncio.create_task(startTestInBackground({"baseUrl": baseUrl, "maxSteps": maxSteps,
-        "sessionId": testSessionId, "model": model, "db": db, "auth": authConfig}))
-    backgroundTasks.add(task)
-    task.add_done_callback(backgroundTasks.discard)
-    return {"content": toTextContent({"sessionId": testSessionId, "status": "started",
-        "message": f"已开始对 {baseUrl} 进行探索性测试", "authConfigured": bool(authConfig),
+    db = AppDatabase.get_instance()
+    model = get_default_model()
+    task = asyncio.create_task(start_test_in_background({"baseUrl": base_url, "maxSteps": max_steps,
+        "sessionId": test_session_id, "model": model, "db": db, "auth": auth_config}))
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard)
+    return {"content": to_text_content({"sessionId": test_session_id, "status": "started",
+        "message": f"已开始对 {base_url} 进行探索性测试", "authConfigured": bool(auth_config),
         "stats": {"visitedPages": 0, "findingsCount": 0, "queueLength": 0}})}
 
 
-async def startTestInBackground(options):
-    baseUrl = options["baseUrl"]
-    maxSteps = options["maxSteps"]
-    sessionId = options["sessionId"]
+async def start_test_in_background(options):
+    base_url = options["baseUrl"]
+    max_steps = options["maxSteps"]
+    session_id = options["sessionId"]
     try:
-        config = {"baseUrl": baseUrl, "maxSteps": maxSteps, "sessionId": sessionId,
+        config = {"baseUrl": base_url, "maxSteps": max_steps, "sessionId": session_id,
                   "model": options["model"], "auth": options.get("auth")}
         agent = ExploratoryAgent(config)
-        agentInstances[sessionId] = agent
-        logger.info(f"正在启动后台测试 {sessionId}")
-        execution = _activeTests().get(sessionId)
+        agent_instances[session_id] = agent
+        logger.info(f"正在启动后台测试 {session_id}")
+        execution = _active_tests().get(session_id)
         if execution:
             execution["status"] = "running"
             execution["currentAction"] = "正在启动浏览器……"
         await agent.start()
-        logger.info(f"会话 {sessionId} 的测试代理已启动")
+        logger.info(f"会话 {session_id} 的测试代理已启动")
         completed = False
         steps = 0
-        while not completed and steps < maxSteps:
-            current = _activeTests().get(sessionId)
+        while not completed and steps < max_steps:
+            current = _active_tests().get(session_id)
             if current and current.get("status") == "stopped":
-                logger.info(f"测试 {sessionId} 已从外部停止")
+                logger.info(f"测试 {session_id} 已从外部停止")
                 break
             result = await agent.step()
             steps += 1
             completed = result["completed"]
             if execution:
-                execution["progress"] = min(100, round(steps / maxSteps * 100))
+                execution["progress"] = min(100, round(steps / max_steps * 100))
                 execution["currentAction"] = display_label(result["action"], ACTIONS)
-                execution["visitedUrlsCount"] = len(agent.getVisitedUrls())
-                execution["findingsCount"] = len(agent.getFindings())
+                execution["visitedUrlsCount"] = len(agent.get_visited_urls())
+                execution["findingsCount"] = len(agent.get_findings())
             if completed:
-                logger.info(f"测试 {sessionId} 已在 {steps} 步后完成")
+                logger.info(f"测试 {session_id} 已在 {steps} 步后完成")
                 break
             await asyncio.sleep(0.5)
         if execution:
@@ -95,17 +95,17 @@ async def startTestInBackground(options):
             execution["progress"] = 100
             execution["currentAction"] = "已完成" if completed else "已停止"
         await agent.stop()
-        logger.info(f"会话 {sessionId} 的测试代理已停止")
+        logger.info(f"会话 {session_id} 的测试代理已停止")
     except Exception as error:
-        logger.error(f"测试 {sessionId} 失败：{error}")
-        execution = _activeTests().get(sessionId)
+        logger.error(f"测试 {session_id} 失败：{error}")
+        execution = _active_tests().get(session_id)
         if execution:
             execution["status"] = "failed"
             execution["endTime"] = datetime.now(timezone.utc)
             execution["lastError"] = str(error)
     finally:
-        agentInstances.pop(sessionId, None)
+        agent_instances.pop(session_id, None)
 
 
-def getAgentInstance(sessionId):
-    return agentInstances.get(sessionId)
+def get_agent_instance(session_id):
+    return agent_instances.get(session_id)

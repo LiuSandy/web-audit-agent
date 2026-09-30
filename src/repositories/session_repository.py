@@ -7,23 +7,23 @@ import sqlite3
 from typing import Any
 
 from src.types.index import OrderedSet
-from src.utils.logger import createLogger
+from src.utils.logger import create_logger
 
-logger = createLogger("repository:session")
+logger = create_logger("repository:session")
 
 
 class SessionRepository:
     def __init__(self, db: sqlite3.Connection) -> None:
         self.db = db
 
-    def saveState(self, sessionId: str, state: dict[str, Any]) -> None:
+    def save_state(self, session_id: str, state: dict[str, Any]) -> None:
         try:
             def encode(value: Any) -> Any:
                 if isinstance(value, set):
                     return {"_type": "Set", "values": list(value)}
                 raise TypeError(f"类型 {type(value).__name__} 无法序列化为 JSON")
 
-            serializedState = json.dumps(
+            serialized_state = json.dumps(
                 state, default=encode, ensure_ascii=False, separators=(",", ":")
             )
             self.db.execute("""
@@ -32,15 +32,15 @@ class SessionRepository:
                 ON CONFLICT(id) DO UPDATE SET
                     state = excluded.state,
                     updated_at = excluded.updated_at
-            """, {"id": sessionId, "state": serializedState})
-            logger.info(f"已保存会话状态：{sessionId}")
+            """, {"id": session_id, "state": serialized_state})
+            logger.info(f"已保存会话状态：{session_id}")
         except Exception as error:  # noqa: BLE001 - preserve source catch
-            logger.error(f"保存会话 {sessionId} 的状态失败：{error}")
+            logger.error(f"保存会话 {session_id} 的状态失败：{error}")
 
-    def loadState(self, sessionId: str) -> dict[str, Any] | None:
+    def load_state(self, session_id: str) -> dict[str, Any] | None:
         try:
             row = self.db.execute(
-                "SELECT state FROM agent_sessions WHERE id = :id", {"id": sessionId}
+                "SELECT state FROM agent_sessions WHERE id = :id", {"id": session_id}
             ).fetchone()
             if row is None:
                 return None
@@ -51,13 +51,13 @@ class SessionRepository:
                 return value
 
             state = json.loads(row["state"], object_hook=revive)
-            logger.info(f"已加载会话状态：{sessionId}")
+            logger.info(f"已加载会话状态：{session_id}")
             return state
         except Exception as error:  # noqa: BLE001 - preserve source catch
-            logger.error(f"加载会话 {sessionId} 的状态失败：{error}")
+            logger.error(f"加载会话 {session_id} 的状态失败：{error}")
             return None
 
-    def listSessions(self) -> list[str]:
+    def list_sessions(self) -> list[str]:
         try:
             rows = self.db.execute(
                 "SELECT id FROM agent_sessions ORDER BY updated_at DESC"

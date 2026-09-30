@@ -4,16 +4,16 @@ import importlib
 from datetime import datetime, timezone
 
 from src.database.database import AppDatabase
-from src.mcp.types import toTextContent
+from src.mcp.types import to_text_content
 from src.repositories.session_repository import SessionRepository
-from src.utils.logger import createLogger
+from src.utils.logger import create_logger
 from src.utils.locale import STATUSES, display_label
 
-logger = createLogger("mcp:sessions")
+logger = create_logger("mcp:sessions")
 
 
-def _activeTests():
-    return importlib.import_module("src.mcp.server").activeTests
+def _active_tests():
+    return importlib.import_module("src.mcp.server").active_tests
 
 
 def _iso(value):
@@ -24,14 +24,14 @@ def _iso(value):
     return None
 
 
-async def handleListSessions(args):
+async def handle_list_sessions(args):
     limit = args.get("limit") if isinstance(args.get("limit"), (int, float)) and args["limit"] > 0 else 10
-    statusFilter = str(args.get("status") or "all")
+    status_filter = str(args.get("status") or "all")
     sessions = []
-    for sid, execution in list(_activeTests().items()):
-        if statusFilter == "completed" and execution.get("status") != "completed":
+    for sid, execution in list(_active_tests().items()):
+        if status_filter == "completed" and execution.get("status") != "completed":
             continue
-        if statusFilter == "active" and execution.get("status") in ("completed", "failed"):
+        if status_filter == "active" and execution.get("status") in ("completed", "failed"):
             continue
         entry = {"sessionId": sid, "status": execution.get("status"),
                  "statusText": display_label(execution.get("status"), STATUSES),
@@ -44,24 +44,24 @@ async def handleListSessions(args):
         sessions.append(entry)
     if len(sessions) < limit:
         try:
-            db = AppDatabase.getInstance()
-            repo = SessionRepository(db.getDatabase())
-            storedIds = repo.listSessions()[:int(limit)]
-            for storedId in storedIds:
-                if any(s["sessionId"] == storedId for s in sessions):
+            db = AppDatabase.get_instance()
+            repo = SessionRepository(db.get_database())
+            stored_ids = repo.list_sessions()[:int(limit)]
+            for stored_id in stored_ids:
+                if any(s["sessionId"] == stored_id for s in sessions):
                     continue
-                state = repo.loadState(storedId)
+                state = repo.load_state(stored_id)
                 if not state:
                     continue
-                looksActive = state["steps"] < 50 and len(state["todoQueue"]) > 0
-                storedStatus = "active" if looksActive else "completed"
-                if statusFilter != "all" and statusFilter != storedStatus:
+                looks_active = state["steps"] < 50 and len(state["todoQueue"]) > 0
+                stored_status = "active" if looks_active else "completed"
+                if status_filter != "all" and status_filter != stored_status:
                     continue
-                sessions.append({"sessionId": storedId, "status": storedStatus,
-                    "statusText": display_label(storedStatus, STATUSES),
+                sessions.append({"sessionId": stored_id, "status": stored_status,
+                    "statusText": display_label(stored_status, STATUSES),
                     "findingsCount": len(state["findings"]),
                     "visitedUrlsCount": len(state["visitedUrls"])})
         except Exception as error:
             logger.error(f"读取已保存的会话失败：{error}")
     result = sessions[:int(limit)]
-    return {"content": toTextContent({"total": len(result), "sessions": result})}
+    return {"content": to_text_content({"total": len(result), "sessions": result})}

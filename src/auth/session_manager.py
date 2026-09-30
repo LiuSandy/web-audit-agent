@@ -13,28 +13,28 @@ class SessionManager:
     def __init__(self, db: sqlite3.Connection) -> None:
         self.db = db
 
-    async def saveSession(self, page: Page, appIdentifier: str) -> None:
+    async def save_session(self, page: Page, app_identifier: str) -> None:
         context = page.context
         cookies = await context.cookies()
-        storageState = await context.storage_state()
+        storage_state = await context.storage_state()
         now = int(time.time() * 1000)
-        expiresAt = now + 24 * 60 * 60 * 1000
+        expires_at = now + 24 * 60 * 60 * 1000
         self.db.execute("""
             INSERT OR REPLACE INTO browser_sessions
             (app_identifier, cookies, storage_state, expires_at, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?)
         """, (
-            appIdentifier,
+            app_identifier,
             json.dumps(cookies, ensure_ascii=False, separators=(",", ":")),
-            json.dumps(storageState, ensure_ascii=False, separators=(",", ":")),
-            expiresAt, now, now,
+            json.dumps(storage_state, ensure_ascii=False, separators=(",", ":")),
+            expires_at, now, now,
         ))
 
-    async def restoreSession(self, page: Page, appIdentifier: str) -> bool:
+    async def restore_session(self, page: Page, app_identifier: str) -> bool:
         row = self.db.execute("""
             SELECT cookies, storage_state, expires_at FROM browser_sessions
             WHERE app_identifier = ? AND expires_at > ?
-        """, (appIdentifier, int(time.time() * 1000))).fetchone()
+        """, (app_identifier, int(time.time() * 1000))).fetchone()
         if row is None:
             return False
 
