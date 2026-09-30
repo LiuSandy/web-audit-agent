@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-import importlib
 import os
 import re
 import sqlite3
 from typing import Literal, NotRequired, TypedDict
 
-CredentialStorage = importlib.import_module("src.auth.credential-storage").CredentialStorage
-Credentials = importlib.import_module("src.auth.credential-storage").Credentials
+from src.auth.credential_storage import Credentials, CredentialStorage
 
 
 class AuthConfig(TypedDict):

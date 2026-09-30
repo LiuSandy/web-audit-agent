@@ -2,23 +2,13 @@
 
 from __future__ import annotations
 
-import importlib
-import importlib.util
-from pathlib import Path
-
 import pytest
 
+from src.auth.credential_storage import CredentialStorage
+from src.auth.session_manager import SessionManager
 from src.database.database import AppDatabase
+from src.repositories.session_repository import SessionRepository
 from src.types.index import OrderedSet
-
-CredentialStorage = importlib.import_module("src.auth.credential-storage").CredentialStorage
-SessionManager = importlib.import_module("src.auth.session-manager").SessionManager
-repositoryPath = Path(__file__).resolve().parents[1] / "src/repositories/session.repository.py"
-repositorySpec = importlib.util.spec_from_file_location("src.repositories.session_repository", repositoryPath)
-assert repositorySpec is not None and repositorySpec.loader is not None
-repositoryModule = importlib.util.module_from_spec(repositorySpec)
-repositorySpec.loader.exec_module(repositoryModule)
-SessionRepository = repositoryModule.SessionRepository
 
 
 @pytest.fixture

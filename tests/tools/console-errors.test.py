@@ -1,12 +1,10 @@
 """Tests for console error monitoring."""
 
-import importlib
-
 import pytest
 import pytest_asyncio
 from playwright.async_api import async_playwright
 
-ConsoleMonitor = importlib.import_module("src.tools.console-errors").ConsoleMonitor
+from src.tools.console_errors import ConsoleMonitor
 
 
 @pytest_asyncio.fixture

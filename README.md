@@ -51,7 +51,7 @@ uv run python -m src.index
 运行已有的生成测试：
 
 ~~~bash
-uv run python -m src.cli.run-tests
+uv run python -m src.cli.run_tests
 uv run pytest generated-tests/broken-images/
 ~~~
 

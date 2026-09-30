@@ -1,36 +1,28 @@
 """LLM-driven exploratory testing agent."""
 
 import asyncio
-import importlib
-import importlib.util
 import json
 from datetime import datetime, timezone
-from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langsmith import traceable
 from playwright.async_api import async_playwright
 
+from src.auth.auth_manager import AuthenticationManager
 from src.database.database import AppDatabase
+from src.repositories.session_repository import SessionRepository
 from src.services.llm import getDefaultModel
+from src.services.test_executor import TestExecutor
+from src.services.test_generator import TestGenerator
+from src.tools.broken_images import findBrokenImages
+from src.tools.console_errors import ConsoleMonitor
+from src.tools.crawler import crawlSite
+from src.tools.network_errors import NetworkMonitor
+from src.tools.validation_errors import findValidationErrors
 from src.types.index import OrderedSet
 from src.utils.logger import createLogger
 from src.utils.locale import BROKEN_IMAGE_REASONS, display_label
-
-ConsoleMonitor = importlib.import_module("src.tools.console-errors").ConsoleMonitor
-NetworkMonitor = importlib.import_module("src.tools.network-errors").NetworkMonitor
-findBrokenImages = importlib.import_module("src.tools.broken-images").findBrokenImages
-crawlSite = importlib.import_module("src.tools.crawler").crawlSite
-findValidationErrors = importlib.import_module("src.tools.validation-errors").findValidationErrors
-AuthenticationManager = importlib.import_module("src.auth.auth-manager").AuthenticationManager
-_repo_spec = importlib.util.spec_from_file_location(
-    "src.repositories.session_repository", Path(__file__).parents[1] / "repositories" / "session.repository.py")
-_repo_module = importlib.util.module_from_spec(_repo_spec)
-_repo_spec.loader.exec_module(_repo_module)
-SessionRepository = _repo_module.SessionRepository
-TestGenerator = importlib.import_module("src.services.test-generator").TestGenerator
-TestExecutor = importlib.import_module("src.services.test-executor").TestExecutor
 
 logger = createLogger("agent:exploratory")
 

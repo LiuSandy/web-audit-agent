@@ -1,12 +1,10 @@
 """Tests for network error monitoring."""
 
-import importlib
-
 import pytest
 import pytest_asyncio
 from playwright.async_api import async_playwright
 
-NetworkMonitor = importlib.import_module("src.tools.network-errors").NetworkMonitor
+from src.tools.network_errors import NetworkMonitor
 
 
 @pytest_asyncio.fixture

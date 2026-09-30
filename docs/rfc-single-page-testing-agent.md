@@ -1,6 +1,6 @@
 # RFC：采用规划—执行架构的单页测试代理
 
-> 历史设计文档。当前实现见 `src/agents/single-page.py`；本文是设计背景，具体行为以代码为准。
+> 历史设计文档。当前实现见 `src/agents/single_page.py`；本文是设计背景，具体行为以代码为准。
 
 **状态：**草案  
 **作者：**Crisler Wintler  
@@ -47,7 +47,7 @@ graph TD
 
 ## 核心组件与数据
 
-`SinglePageTestingAgent` 管理浏览器、页面、模型、计划和结果。原提案将页面分析、测试规划、执行与验证拆成独立工具；当前 Python 版本主要集中在 `src/agents/single-page.py`。
+`SinglePageTestingAgent` 管理浏览器、页面、模型、计划和结果。原提案将页面分析、测试规划、执行与验证拆成独立工具；当前 Python 版本主要集中在 `src/agents/single_page.py`。
 
 | 数据结构 | 主要字段 |
 |---|---|
@@ -115,5 +115,5 @@ graph TD
 ## 参考
 
 - [需求记录](issue-single-page-testing-agent.md)
-- [当前 Python 实现](../src/agents/single-page.py)
+- [当前 Python 实现](../src/agents/single_page.py)
 - [ReAct 论文](https://arxiv.org/abs/2210.03629)

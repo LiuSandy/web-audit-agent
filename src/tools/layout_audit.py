@@ -1,10 +1,8 @@
 """Layout audit for a page; DOM heuristics run in the browser."""
 
-import importlib
-
+from src.tools.screenshot import captureLayoutFindingScreenshots
 from src.utils.logger import createLogger
 
-captureLayoutFindingScreenshots = importlib.import_module("src.tools.screenshot").captureLayoutFindingScreenshots
 logger = createLogger("tool:layout-audit")
 
 _LAYOUT_CALLBACK = r'''

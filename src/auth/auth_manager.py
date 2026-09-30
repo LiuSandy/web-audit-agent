@@ -1,11 +1,9 @@
 """Coordinates login detection, execution, and session handling."""
 
-import importlib
-
-CredentialProvider = importlib.import_module("src.auth.credential-provider").CredentialProvider
-LoginFlowDetector = importlib.import_module("src.auth.login-detector").LoginFlowDetector
-LoginExecutor = importlib.import_module("src.auth.login-executor").LoginExecutor
-SessionManager = importlib.import_module("src.auth.session-manager").SessionManager
+from src.auth.credential_provider import CredentialProvider
+from src.auth.login_detector import LoginFlowDetector
+from src.auth.login_executor import LoginExecutor
+from src.auth.session_manager import SessionManager
 
 
 class AuthenticationManager:

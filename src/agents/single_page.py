@@ -1,6 +1,5 @@
 """Single-page testing agent with a plan-and-execute flow."""
 
-import importlib
 import json
 import os
 import time
@@ -9,17 +8,17 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langsmith import traceable
 from playwright.async_api import async_playwright
 
+from src.auth.auth_manager import AuthenticationManager
 from src.database.database import AppDatabase
 from src.services.llm import getDefaultModel
+from src.tools.broken_images import findBrokenImages
+from src.tools.console_errors import ConsoleMonitor
+from src.tools.layout_audit import runLayoutAudit
+from src.tools.network_errors import NetworkMonitor
+from src.tools.visual_regression import runVisualRegression
 from src.utils.logger import createLogger
 from src.utils.locale import ACTIONS, STATUSES, display_label
 
-ConsoleMonitor = importlib.import_module("src.tools.console-errors").ConsoleMonitor
-NetworkMonitor = importlib.import_module("src.tools.network-errors").NetworkMonitor
-findBrokenImages = importlib.import_module("src.tools.broken-images").findBrokenImages
-runLayoutAudit = importlib.import_module("src.tools.layout-audit").runLayoutAudit
-runVisualRegression = importlib.import_module("src.tools.visual-regression").runVisualRegression
-AuthenticationManager = importlib.import_module("src.auth.auth-manager").AuthenticationManager
 logger = createLogger("agent:single-page")
 
 

@@ -16,12 +16,12 @@ uv run python -m src.index           # Run the interactive agent
 uv run python -m src.mcp.index       # Run the MCP stdio server
 uv run pytest                        # Run handwritten tests
 uv run ruff check src tests          # Check configured lint rules
-uv run python -m src.cli.run-tests   # Run saved generated E2E tests
+uv run python -m src.cli.run_tests   # Run saved generated E2E tests
 ```
 
 ## Coding Style & Naming Conventions
 
-Use four-space indentation and follow the surrounding Python style. Ruff enforces selected `E4`, `E7`, `E9`, and `F` rules; run it before submitting changes. Hyphenated filenames such as `src/tools/broken-images.py` and public camelCase names such as `findBrokenImages` are intentional; retain those names for compatibility. Import hyphenated modules with `importlib.import_module()`. 
+Use four-space indentation and follow the surrounding Python style. Ruff enforces selected `E4`, `E7`, `E9`, and `F` rules; run it before submitting changes. Module files use PEP 8 snake_case names and are imported with normal `import` statements. Public camelCase names such as `findBrokenImages` are intentional; retain those names for compatibility.
 
 ## Testing Guidelines
 

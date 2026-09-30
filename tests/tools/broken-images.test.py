@@ -1,12 +1,10 @@
 """Tests for broken image detection."""
 
-import importlib
-
 import pytest
 import pytest_asyncio
 from playwright.async_api import async_playwright
 
-findBrokenImages = importlib.import_module("src.tools.broken-images").findBrokenImages
+from src.tools.broken_images import findBrokenImages
 
 
 @pytest_asyncio.fixture

@@ -1,9 +1,8 @@
 """Executes login flows on target pages."""
 
-import importlib
 import re
 
-MFAHandler = importlib.import_module("src.auth.mfa-handler").MFAHandler
+from src.auth.mfa_handler import MFAHandler
 
 
 class LoginExecutor:

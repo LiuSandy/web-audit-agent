@@ -43,7 +43,7 @@
 **目标**：新增 `audit_seo` 检测工具，并注册为 Agent 动作，让探索过程中自动发现 SEO 问题。
 
 **任务**
-- [ ] `src/tools/seo-audit.py`：照 `broken-images.py` 模式实现，注入回调检查：
+- [ ] `src/tools/seo-audit.py`：照 `broken_images.py` 模式实现，注入回调检查：
   - [ ] `<title>` 缺失/过长/重复
   - [ ] meta description 缺失/过长
   - [ ] h1 数量 ≠ 1、标题层级跳跃
@@ -72,13 +72,13 @@
 - [ ] 子命令设计（草案）：
   - `run <url>`：非交互运行探索（`--autonomous --max-steps N --json`）
   - `report <session-id>`：按会话重新生成报告
-  - `test`：等价现有 `src/cli/run-tests.py`，执行生成的 E2E 测试
+  - `test`：等价现有 `src/cli/run_tests.py`，执行生成的 E2E 测试
   - `mcp`：启动 MCP server（等价 `src/mcp/index.py`）
   - 交互模式保留为无参数时的默认行为
 - [ ] rich 输出：spinner/status（`agent.start()` 阶段）、findings 表格、severity 着色
 - [ ] 退出码约定：0 成功 / 1 探索异常 / 2 参数错误（脚本化友好）
 - [ ] `--json` 输出模式：findings 直接打印 JSON，供管道消费
-- [ ] 顺手清理：`wrapText(str, ...)` 遮蔽内建 `str`（`src/index.py:56`）、importlib 手动加载 hyphen 模块的重复写法抽成公共助手
+- [ ] 顺手清理：`wrapText(str, ...)` 遮蔽内建 `str`（`src/index.py`）——importlib 手动加载 hyphen 模块的写法已随文件名规范化（2026-09-30）整体移除，无需再抽助手
 
 **验收**
 - `uv run python -m src.index --help` 输出规范用法
@@ -154,3 +154,4 @@
 | 2026-09-30 | 目标定义调整：以项目本身为目标（可靠、可观测、可评测），文档表述统一为项目视角，TODO 不变 |
 | 2026-09-30 | #1 LangSmith 观测实现完成：环境变量接入 + traceable 步骤级调用树（两个 Agent 均覆盖）+ docs/observability.md；新增单测 3 项，ruff 与全量 64 项测试通过。待配置 LANGSMITH_API_KEY 后做面板验证 |
 | 2026-09-30 | #1 面板验证通过：3 条 agent.step trace 落库，metadata 与逐步延迟可见，任务正式完成；验证用临时脚本已删除 |
+| 2026-09-30 | 模块文件名规范化：19 个连字符/点号命名的文件 `git mv` 为 snake_case（PEP 8），全部 importlib 动态加载改为普通 import（仅保留 mcp tools 内打破循环依赖的函数级延迟导入）；AGENTS.md 命名规范与 README/docs 中的路径、命令同步更新。ruff 通过，全量 64 项测试通过（1 项外部服务超时，重跑通过） |

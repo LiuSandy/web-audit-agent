@@ -1,13 +1,12 @@
 """Tests for form validation error detection."""
 
-import importlib
 import math
 
 import pytest
 import pytest_asyncio
 from playwright.async_api import async_playwright
 
-findValidationErrors = importlib.import_module("src.tools.validation-errors").findValidationErrors
+from src.tools.validation_errors import findValidationErrors
 
 
 @pytest_asyncio.fixture

@@ -1,14 +1,12 @@
 """Exercise the generated Python test path without an external model or website."""
 
-import importlib
 from pathlib import Path
 
 import pytest
 
-
-GeneratorClass = importlib.import_module("src.services.test-generator").TestGenerator
-ExecutorClass = importlib.import_module("src.services.test-executor").TestExecutor
-runner = importlib.import_module("src.cli.run-tests")
+from src.cli import run_tests as runner
+from src.services.test_executor import TestExecutor as ExecutorClass
+from src.services.test_generator import TestGenerator as GeneratorClass
 
 
 class FixedModel:

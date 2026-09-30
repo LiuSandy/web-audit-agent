@@ -4,11 +4,11 @@ import asyncio
 import importlib
 import time
 
+from src.agents.single_page import SinglePageTestingAgent
 from src.database.database import AppDatabase
 from src.mcp.types import toTextContent
 from src.utils.logger import createLogger
 
-SinglePageTestingAgent = importlib.import_module("src.agents.single-page").SinglePageTestingAgent
 logger = createLogger("mcp:single-page")
 backgroundTasks = set()
 

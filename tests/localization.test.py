@@ -1,14 +1,11 @@
 """Check Chinese user-facing output without changing machine-readable values."""
 
-import importlib
 import json
 
 import pytest
 
+from src.services.test_executor import TestExecutor as _TestExecutor
 from src.utils.report import generateReport
-
-
-_TestExecutor = importlib.import_module("src.services.test-executor").TestExecutor
 
 
 @pytest.mark.asyncio
@@ -51,7 +48,7 @@ def test_execution_report_prefers_chinese_description_over_python_identifier():
 
 @pytest.mark.asyncio
 async def test_single_page_findings_have_chinese_context_and_raw_details(monkeypatch):
-    module = importlib.import_module("src.agents.single-page")
+    import src.agents.single_page as module
     agent = module.SinglePageTestingAgent.__new__(module.SinglePageTestingAgent)
     agent.page = type("Page", (), {"url": "https://example.com", "is_closed": lambda self: False,
         "evaluate": lambda self, _script: _async_value(False)})()
@@ -69,7 +66,7 @@ async def _async_value(value):
 
 
 def test_mcp_description_is_chinese_without_changing_tool_name():
-    definitions = importlib.import_module("src.mcp.tools.definitions").TOOL_DEFINITIONS
+    from src.mcp.tools.definitions import TOOL_DEFINITIONS as definitions
     assert definitions[0]["name"] == "run_exploratory_test"
     assert definitions[0]["description"] == "开始探索性测试，发现并测试多个页面"
     assert definitions[0]["inputSchema"]["properties"]["baseUrl"]["description"] == "待测试网站的起始地址"
@@ -77,7 +74,7 @@ def test_mcp_description_is_chinese_without_changing_tool_name():
 
 @pytest.mark.asyncio
 async def test_single_page_mcp_status_has_chinese_display_text(monkeypatch):
-    status_module = importlib.import_module("src.mcp.tools.status")
+    import src.mcp.tools.status as status_module
     state = {"status": "executing", "currentAction": "正在测试页面", "startTime": 1000,
              "testPlan": {"totalTests": 2}, "results": [{"findings": [
                  {"type": "console_error", "description": "控制台错误：示例",

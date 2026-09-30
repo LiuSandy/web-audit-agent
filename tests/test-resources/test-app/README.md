@@ -27,10 +27,9 @@ Then open: http://localhost:8080/login.html
 
 ```python
 import asyncio
-import importlib
+from src.auth.credential_storage import CredentialStorage
 from src.database.database import AppDatabase
 
-CredentialStorage = importlib.import_module("src.auth.credential-storage").CredentialStorage
 db = AppDatabase.getInstance()
 storage = CredentialStorage(db.getDatabase())
 asyncio.run(storage.set("testapp", {

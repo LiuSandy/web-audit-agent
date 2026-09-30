@@ -26,7 +26,7 @@ uv run python -m src.index
 
 ~~~bash
 # 交互式运行器
-uv run python -m src.cli.run-tests
+uv run python -m src.cli.run_tests
 
 # 运行全部生成的测试
 uv run pytest generated-tests/

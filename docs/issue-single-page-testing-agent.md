@@ -1,6 +1,6 @@
 # 单页测试代理：规划—执行功能需求
 
-> 历史设计文档。当前实现见 `src/agents/single-page.py`。以下任务和验收条件描述初始提案，不能据此推断当前代码已全部实现。
+> 历史设计文档。当前实现见 `src/agents/single_page.py`。以下任务和验收条件描述初始提案，不能据此推断当前代码已全部实现。
 
 ## 概要与动机
 
@@ -74,7 +74,7 @@ graph LR
 ## 参考
 
 - [单页测试代理设计](rfc-single-page-testing-agent.md)
-- [当前 Python 单页代理](../src/agents/single-page.py)
+- [当前 Python 单页代理](../src/agents/single_page.py)
 - [ReAct 论文](https://arxiv.org/abs/2210.03629)
 
 原需求标签：`enhancement`、`agent`、`testing`、`plan-execute`；优先级为高，预计工作量为大。

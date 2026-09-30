@@ -58,4 +58,4 @@ VS Code 的 `servers` 配置可使用相同的 `command`、`args`、`cwd` 和 `e
 
 ## 主要实现文件
 
-`src/mcp/index.py`、`src/mcp/server.py`、`src/mcp/tools/`、`src/mcp/resources/reports.py`、`src/agents/` 和 `src/repositories/session.repository.py`。
+`src/mcp/index.py`、`src/mcp/server.py`、`src/mcp/tools/`、`src/mcp/resources/reports.py`、`src/agents/` 和 `src/repositories/session_repository.py`。

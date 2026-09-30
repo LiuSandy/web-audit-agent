@@ -1,6 +1,5 @@
 """Tests for the auth modules."""
 
-import importlib
 import threading
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -10,10 +9,9 @@ import pytest
 import pytest_asyncio
 from playwright.async_api import async_playwright
 
+from src.auth.auth_manager import AuthenticationManager
+from src.auth.credential_storage import CredentialStorage
 from src.database.database import AppDatabase
-
-AuthenticationManager = importlib.import_module("src.auth.auth-manager").AuthenticationManager
-CredentialStorage = importlib.import_module("src.auth.credential-storage").CredentialStorage
 
 
 @pytest_asyncio.fixture

@@ -1,20 +1,14 @@
 """MCP tool for listing saved sessions."""
 
 import importlib
-import importlib.util
 from datetime import datetime, timezone
-from pathlib import Path
 
 from src.database.database import AppDatabase
 from src.mcp.types import toTextContent
+from src.repositories.session_repository import SessionRepository
 from src.utils.logger import createLogger
 from src.utils.locale import STATUSES, display_label
 
-_repo_spec = importlib.util.spec_from_file_location(
-    "src.repositories.session_repository", Path(__file__).parents[2] / "repositories" / "session.repository.py")
-_repo_module = importlib.util.module_from_spec(_repo_spec)
-_repo_spec.loader.exec_module(_repo_module)
-SessionRepository = _repo_module.SessionRepository
 logger = createLogger("mcp:sessions")
 
 

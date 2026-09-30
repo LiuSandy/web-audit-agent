@@ -1,8 +1,6 @@
 """WebAudit interactive CLI entry."""
 
 import asyncio
-import importlib
-import importlib.util
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -10,17 +8,13 @@ from pathlib import Path
 import questionary
 
 from src.agents.exploratory import ExploratoryAgent
+from src.auth.credential_provider import CredentialProvider
 from src.database.database import AppDatabase
+from src.repositories.session_repository import SessionRepository
 from src.utils.logger import createLogger, setVerbose
 from src.utils.locale import ACTIONS, display_label
 from src.utils.report import generateReport
 
-CredentialProvider = importlib.import_module("src.auth.credential-provider").CredentialProvider
-_repo_spec = importlib.util.spec_from_file_location(
-    "src.repositories.session_repository", Path(__file__).parent / "repositories" / "session.repository.py")
-_repo_module = importlib.util.module_from_spec(_repo_spec)
-_repo_spec.loader.exec_module(_repo_module)
-SessionRepository = _repo_module.SessionRepository
 logger = createLogger("cli")
 
 

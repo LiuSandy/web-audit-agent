@@ -22,8 +22,7 @@ def test_buildStepMetadata_defaults_empty_session_id():
 
 
 def test_step_and_execute_action_are_traceable_wrapped():
-    import importlib
-    exploratory = importlib.import_module("src.agents.exploratory")
+    import src.agents.exploratory as exploratory
     for method in ("_step", "executeAction", "performAutomaticBugScanning", "generateTests"):
         wrapped = getattr(exploratory.ExploratoryAgent, method)
         assert getattr(wrapped, "__langsmith_traceable__", False) or \

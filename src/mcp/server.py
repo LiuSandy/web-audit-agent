@@ -1,21 +1,17 @@
 """MCP stdio server exposing WebAudit tools and resources."""
 
-import importlib
-
 import mcp.types as types
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
 from mcp.shared.exceptions import MCPError
 
+from src.mcp.resources.reports import handleTestReportResource
+from src.mcp.tools.definitions import TOOL_DEFINITIONS
+from src.mcp.tools.exploratory import handleRunExploratoryTest
+from src.mcp.tools.sessions import handleListSessions
+from src.mcp.tools.single_page import handleRunSinglePageTest
+from src.mcp.tools.status import handleGetTestStatus, handleStopTest
 from src.utils.logger import createLogger
-
-TOOL_DEFINITIONS = importlib.import_module("src.mcp.tools.definitions").TOOL_DEFINITIONS
-handleRunExploratoryTest = importlib.import_module("src.mcp.tools.exploratory").handleRunExploratoryTest
-handleRunSinglePageTest = importlib.import_module("src.mcp.tools.single-page").handleRunSinglePageTest
-handleGetTestStatus = importlib.import_module("src.mcp.tools.status").handleGetTestStatus
-handleStopTest = importlib.import_module("src.mcp.tools.status").handleStopTest
-handleListSessions = importlib.import_module("src.mcp.tools.sessions").handleListSessions
-handleTestReportResource = importlib.import_module("src.mcp.resources.reports").handleTestReportResource
 
 logger = createLogger("mcp-server")
 activeTests = {}

@@ -6,6 +6,7 @@ import time
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
+from src.agents.exploratory import ExploratoryAgent
 from src.database.database import AppDatabase
 from src.services.llm import getDefaultModel
 from src.utils.logger import createLogger
@@ -13,7 +14,6 @@ from src.utils.locale import ACTIONS, display_label
 
 from src.mcp.types import toTextContent
 
-ExploratoryAgent = importlib.import_module("src.agents.exploratory").ExploratoryAgent
 logger = createLogger("mcp:exploratory")
 agentInstances = {}
 backgroundTasks = set()
