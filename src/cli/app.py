@@ -1,4 +1,5 @@
 """WebAudit CLI 装配：typer 应用与版本号。"""
+import asyncio
 from importlib.metadata import PackageNotFoundError, version
 
 import typer
@@ -7,7 +8,8 @@ from src.cli.commands.mcp import mcp_command
 from src.cli.commands.report import report_command
 from src.cli.commands.run import run_command
 from src.cli.commands.test import test_command
-from src.cli.core.exits import OK
+from src.cli.core.console import console
+from src.cli.core.exits import INTERRUPTED, OK
 
 try:
     __version__ = version("web-audit-agent")
@@ -30,8 +32,17 @@ def main_callback(
     if version_flag:
         typer.echo(f"WebAudit {__version__}")
         raise typer.Exit(OK)
-    if ctx.invoked_subcommand is None:
-        typer.echo(ctx.get_help())
+    if ctx.invoked_subcommand is not None:
+        return
+    from src.cli.wizard import WizardCancelled, run_wizard  # 延迟导入：子命令不拖起 questionary
+
+    try:
+        raise typer.Exit(asyncio.run(run_wizard()))
+    except WizardCancelled:
+        console.print("操作已取消。")
+        raise typer.Exit(OK)
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        raise typer.Exit(INTERRUPTED)
 
 
 def main():
