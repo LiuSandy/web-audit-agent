@@ -40,3 +40,6 @@ agent_state.sqlite
 reports
 generated-tests
 dist/
+
+# superpowers working docs (specs/plans stay local)
+docs/superpowers/
