@@ -57,18 +57,18 @@ _SNAPSHOT_CALLBACK = r'''
     }
     let selector = "";
     if (el.id) {
-      selector = `#${el.id}`;
+      selector = `#${CSS.escape(el.id)}`;
     } else if (tagName === "a" && el.href) {
       const href = el.getAttribute("href");
       const absoluteHref = el.href;
       if (href)
-        selector = `a[href="${href}"]`;
+        selector = `a[href="${CSS.escape(href)}"]`;
       const normalizedHref = absoluteHref.replace(/\/$/, "");
       const isVisited = visitedUrls.includes(absoluteHref) || visitedUrls.includes(normalizedHref);
       if (isVisited)
         extra += " [VISITED]";
-    } else if (el.className) {
-      selector = `${tagName}.${el.className.split(" ").join(".")}`;
+    } else if (el.classList.length) {
+      selector = `${tagName}.${Array.from(el.classList, cls => CSS.escape(cls)).join(".")}`;
     } else {
       selector = tagName;
     }
@@ -112,8 +112,13 @@ ${recentHistory || "None"}
 '''
 
 
+class SessionTargetError(ValueError):
+    """Saved exploration target conflicts with this invocation."""
+
+
 class ExploratoryAgent:
     def __init__(self, config):
+        self.session_ready = False
         self.browser = None
         self.page = None
         self.playwright = None
@@ -137,7 +142,7 @@ class ExploratoryAgent:
                 "parallel": config.get("testParallelExecution") or False,
                 "maxConcurrency": config.get("testMaxConcurrency") or 4,
                 "timeout": config.get("testTimeout") or 30000,
-                "retryCount": config.get("testRetryCount") or 2}
+                "retryCount": config.get("testRetryCount", 2)}
             self.test_executor = TestExecutor(execution_config)
 
     async def start(self):
@@ -149,6 +154,30 @@ class ExploratoryAgent:
                 logger.info(f"已恢复会话 {self.config['sessionId']}，当前为第 {self.state['steps']} 步")
             else:
                 logger.info(f"未找到会话 {self.config['sessionId']} 的状态，开始新测试")
+        saved_config = self.state.get("runConfig") or {}
+        saved_url = self.state.get("baseUrl")
+        if not saved_url:
+            urls = list(self.state.get("visitedUrls") or [])
+            urls += [h.get("url") for h in self.state.get("history", []) if h.get("url")]
+            urls += [f.get("url") for f in self.state.get("findings", []) if f.get("url")]
+            saved_url = next((u for u in urls if urlparse(u).netloc), None)
+        if saved_url:
+            old, new = urlparse(saved_url), urlparse(self.config["baseUrl"])
+            if (old.scheme.lower(), old.hostname, old.port or (443 if old.scheme == "https" else 80)) != (
+                new.scheme.lower(), new.hostname, new.port or (443 if new.scheme == "https" else 80)):
+                raise SessionTargetError(f"会话目标 {saved_url} 与本次目标 {self.config['baseUrl']} 不一致")
+        elif self.state["steps"]:
+            raise SessionTargetError("旧会话无法确定目标站点，请开始新会话")
+        if not self.config.get("auth") and saved_config.get("authAppIdentifier"):
+            self.config["auth"] = {"required": True, "appIdentifier": saved_config["authAppIdentifier"]}
+        self.state["baseUrl"] = self.state.get("baseUrl") or self.config["baseUrl"]
+        # Persist references and non-secret options only; never credentials or model objects.
+        self.state["runConfig"] = {key: self.config.get(key) for key in (
+            "maxSteps", "maxFailures", "enableTestGeneration", "testDryRun", "testParallelExecution",
+            "testMaxConcurrency", "testTimeout", "testRetryCount")}
+        self.state["runConfig"]["authAppIdentifier"] = (self.config.get("auth") or {}).get("appIdentifier")
+        self.state["visitedUrls"] = OrderedSet(self.state.get("visitedUrls") or [])
+        self.session_ready = True
         self.playwright = await async_playwright().start()
         self.browser = await self.playwright.chromium.launch(
             headless=True, args=["--no-sandbox", "--disable-setuid-sandbox"])
@@ -156,23 +185,24 @@ class ExploratoryAgent:
         self.console_monitor = ConsoleMonitor(self.page)
         self.network_monitor = NetworkMonitor(self.page)
         logger.log("控制台与网络监视器已启动")
+        auth = self.config.get("auth") or {}
+        if auth.get("required"):
+            await self.page.goto(self.config["baseUrl"])
+            if auth.get("credentials"):
+                await self.auth_manager.store_credentials(auth["appIdentifier"], auth["credentials"])
+                logger.log("已保存或更新本次会话的凭据")
+            logger.log("目标网站需要登录，正在尝试登录……")
+            auth_res = await self.auth_manager.authenticate(self.page, auth["appIdentifier"])
+            if auth_res["success"]:
+                logger.log(f"✓ 已通过 {auth_res['method']} 登录")
+            else:
+                logger.error(f"✗ 登录失败：{auth_res.get('error')}")
+                raise RuntimeError(f"登录失败：{auth_res.get('error')}")
         if self.state["steps"] == 0:
             logger.log("正在预先发现页面……")
             discovered_urls = await crawl_site(self.page, self.config["baseUrl"])
             self.state["todoQueue"] = list(discovered_urls)
             logger.log(f"已将发现的 {len(discovered_urls)} 个页面加入待办队列")
-            auth = self.config.get("auth") or {}
-            if auth.get("required"):
-                if auth.get("credentials"):
-                    await self.auth_manager.store_credentials(auth["appIdentifier"], auth["credentials"])
-                    logger.log("已保存或更新本次会话的凭据")
-                logger.log("目标网站需要登录，正在尝试登录……")
-                auth_res = await self.auth_manager.authenticate(self.page, auth["appIdentifier"])
-                if auth_res["success"]:
-                    logger.log(f"✓ 已通过 {auth_res['method']} 登录")
-                else:
-                    logger.error(f"✗ 登录失败：{auth_res.get('error')}")
-                    raise RuntimeError(f"登录失败：{auth_res.get('error')}")
             await self.page.goto(self.config["baseUrl"])
             logger.log(f"已访问 {self.config['baseUrl']}")
         else:
@@ -183,14 +213,29 @@ class ExploratoryAgent:
             else:
                 await self.page.goto(self.config["baseUrl"])
 
+    def save_state(self):
+        if self.config.get("sessionId") and self.session_ready:
+            self.session_repo.save_state(self.config["sessionId"], self.state)
+
     async def stop(self):
+        errors = []
         if self.browser:
-            await self.browser.close()
-            self.browser = None
-            self.page = None
+            try:
+                await self.browser.close()
+            except Exception as error:
+                errors.append(str(error))
+            finally:
+                self.browser = None
+                self.page = None
         if self.playwright:
-            await self.playwright.stop()
-            self.playwright = None
+            try:
+                await self.playwright.stop()
+            except Exception as error:
+                errors.append(str(error))
+            finally:
+                self.playwright = None
+        if errors:
+            raise RuntimeError("清理浏览器失败：" + "；".join(errors))
         logger.log("探索测试代理已停止")
 
     async def step(self, guidance=None):
@@ -200,7 +245,19 @@ class ExploratoryAgent:
         url = self.page.url
         self.state["visitedUrls"].add(url)
         metadata = build_step_metadata(self.config.get("sessionId"), self.state, url)
-        return await self._step(guidance, url, langsmith_extra={"metadata": metadata})
+        try:
+            result = await self._step(guidance, url, langsmith_extra={"metadata": metadata})
+        except asyncio.CancelledError:
+            raise
+        except Exception as error:
+            result = {"action": "error", "reason": str(error), "result": str(error),
+                      "success": False, "completed": False}
+        if result.get("action") == "error":
+            result["success"] = False
+            self.state["history"].append({"action": "error", "reason": result["reason"],
+                                          "url": url, "success": False, "result": result.get("result", result["reason"])})
+        self.save_state()
+        return result
 
     @traceable(name="agent.step", run_type="chain")
     async def _step(self, guidance=None, url=None):
@@ -271,22 +328,27 @@ class ExploratoryAgent:
         except Exception:
             logger.error("无法解析模型响应", content)
             return {"action": "error", "reason": "模型返回的 JSON 无效", "completed": False}
+        if not isinstance(parsed, dict) or not isinstance(parsed.get("action"), str) or not isinstance(parsed.get("reason"), str):
+            return {"action": "error", "reason": "模型响应缺少有效 action/reason", "completed": False, "success": False}
         logger.log(f"代理决策：{parsed.get('reason')}")
-        logger.log(f"执行操作：{parsed.get('action')} {json.dumps(parsed.get('params'), ensure_ascii=False) if parsed.get('params') else ''}")
-        await self.execute_action(parsed["action"], parsed.get("params"))
+        logger.log(f"执行操作：{parsed.get('action')}")
+        action_result = await self.execute_action(parsed["action"], parsed.get("params"))
         self.state["history"].append({"action": parsed["action"], "reason": parsed["reason"],
-                                      "url": self.page.url, "params": parsed.get("params")})
+                                      "url": self.page.url, "params": parsed.get("params"),
+                                      **action_result})
         stats = {"currentUrl": self.page.url, "queueLength": len(self.state["todoQueue"]),
                  "visitedCount": len(self.state["visitedUrls"]), "findingsCount": len(self.state["findings"])}
-        if self.config.get("sessionId"):
-            self.session_repo.save_state(self.config["sessionId"], self.state)
         return {"action": parsed["action"], "reason": parsed["reason"],
-                "completed": parsed["action"] == "finish", "stats": stats}
+                "completed": parsed["action"] == "finish" and action_result["success"], "stats": stats, **action_result}
 
     @traceable(name="execute_action", run_type="tool")
     async def execute_action(self, action, params):
+        result = await self._execute_action(action, params)
+        return result if isinstance(result, dict) else {"success": True, "result": result}
+
+    async def _execute_action(self, action, params):
         if not self.page:
-            return None
+            return {"success": False, "result": "测试代理尚未启动"}
         try:
             if action == "add_to_queue":
                 new_urls = params if isinstance(params, list) else [params] if isinstance(params, str) else (params or {}).get("urls", [])
@@ -310,7 +372,7 @@ class ExploratoryAgent:
                 if not target_url or not isinstance(target_url, str):
                     err = f"访问失败：URL 参数无效。收到的参数：{json.dumps(params, ensure_ascii=False)}"
                     logger.error(err)
-                    return err
+                    return {"success": False, "result": err}
                 logger.log(f"正在访问：{target_url}")
                 self.state["todoQueue"] = [u for u in self.state["todoQueue"] if u != target_url]
                 await self.page.goto(target_url)
@@ -348,10 +410,10 @@ class ExploratoryAgent:
                 logger.log("模型决定结束探索")
                 return "已完成"
             logger.warn(f"未知操作：{action}")
-            return f"未知操作：{action}"
+            return {"success": False, "result": f"未知操作：{action}"}
         except Exception as error:
             logger.error(f"执行操作失败：{error}")
-            return f"执行操作失败：{error}"
+            return {"success": False, "result": f"执行操作失败：{error}"}
         finally:
             if action in ("navigate", "click", "fill_form"):
                 await self.perform_automatic_bug_scanning()

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import json
 import os
 import sqlite3
@@ -43,7 +44,7 @@ class CredentialStorage:
                 if len(key_hex) == 64:
                     return bytes.fromhex(key_hex)
             except Exception as error:  # noqa: BLE001 - preserve source catch
-                print(f"读取密钥文件失败：{error}")
+                print(f"读取密钥文件失败：{error}", file=sys.stderr)
 
         key = os.urandom(32)
         try:
@@ -51,7 +52,7 @@ class CredentialStorage:
             with os.fdopen(descriptor, "w", encoding="utf-8") as file:
                 file.write(key.hex())
         except Exception:  # noqa: BLE001 - preserve source catch
-            print("⚠️  Could not save encryption key to file. Credentials will be lost on exit.")
+            print("⚠️  Could not save encryption key to file. Credentials will be lost on exit.", file=sys.stderr)
         return key
 
     async def set(self, app_identifier: str, credentials: Credentials) -> None:

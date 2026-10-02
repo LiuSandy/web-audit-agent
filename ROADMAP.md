@@ -63,7 +63,7 @@
 
 ## 3. CLI 专业化（P0）
 
-**现状**：`src/index.py` 是 questionary 逐条问询 + 裸 print + emoji，无 flags、无 `--help`、无法非交互运行（自动化跑批/CI 场景不可用）。
+**当前状态**：typer 子命令、共享 runner、rich 输出与 JSON 模式已实现；运行失败、取消、清理和会话恢复契约已补齐。原先 questionary 逐条问询入口保留为默认交互向导。
 
 **目标**：专业 CLI 的样子——子命令、参数、管道友好、rich 美化。`rich` 已在依赖里，直接用。
 
@@ -77,7 +77,10 @@
   - 交互模式保留为无参数时的默认行为
 - [x] rich 输出：spinner/status（`agent.start()` 阶段）、findings 表格、severity 着色
 - [x] 退出码约定：0 成功 / 1 探索异常 / 2 参数错误（脚本化友好）
-- [x] `--json` 输出模式：findings 直接打印 JSON，供管道消费
+- [x] `--json` 输出模式：输出包含状态、终止原因、本次/累计步数、失败步数、报告路径和 findings 的单个 JSON 对象；诊断走 stderr
+- [x] 异常路径：启动部分失败仍清理；模型/动作连续失败停止；报告与会话保存失败传播；中断尽量保存部分结果
+- [x] 会话恢复：保存目标与非敏感配置、校验站点、复用认证标识并重新认证；兼容可推导站点的旧 state
+- [x] 步数语义：正整数预算按本次运行计数；区分 completed / step_limit / failed / cancelled
 - [x] 顺手清理：`wrap_text(str, ...)` 遮蔽内建 `str`（`src/index.py`）——importlib 手动加载 hyphen 模块的写法已随文件名规范化（2026-09-30）整体移除，无需再抽助手
 
 **验收**
@@ -158,3 +161,4 @@
 | 2026-09-30 | 标识符命名规范化（PEP 8）：44 个文件、约 1260 处 camelCase 变量/函数/方法名批量改为 snake_case；类名保持 PascalCase，dict/JSON 键（MCP schema、state、LangSmith metadata、SQL）、内联 JS 与外部 API 参数（mimeType/includeAA 等）按契约保留。AGENTS.md 命名规范与 observability/ROADMAP 中的标识符引用同步更新。ruff 通过，全量 64 项测试通过（2 项 httpstat.us 外部超时，重跑通过），22 个模块 import 冒烟通过 |
 | 2026-09-30 | 优先级调整（用户指定）：#3 CLI 专业化提为最高（P2 → P0），执行顺序改为 3 → 5 → 2 → 4（#1 已完成） |
 | 2026-09-30 | #3 CLI 专业化实现完成：typer 子命令 run/report/test/mcp + 向导重写（rich 渲染、共用 runner）+ 退出码契约 0/1/2/130 + --json 输出 + hatchling 打包（uv build 可装）。src/cli/run_tests.py 由 test 子命令替代；wrap_text 遮蔽内建问题随旧向导消解。ruff 通过，全量 103 项测试通过 |
+| 2026-10-02 | #3 异常路径与恢复契约补齐：保存失败传播、完整启动/清理生命周期、连续失败阈值、动作结果历史、结构化 JSON 结果、恢复目标及认证校验；新增失败边界与本地 Chromium CLI 集成验证；最终全量 152 项测试、Ruff 与 diff 检查通过。 |

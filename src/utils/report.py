@@ -15,7 +15,10 @@ async def generate_report(
     visited_urls: list[str] | None = None,
     session_id: str | None = None,
     base_url: str | None = None,
+    run_summary: dict | None = None,
 ) -> str:
+    if session_id and any(c in session_id for c in ("/", "\\", "\x00")):
+        raise ValueError("会话 ID 不能包含路径分隔符或空字符")
     timestamp = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     timestamp = timestamp.replace(":", "-").replace(".", "-")
     filename = f"report-{session_id}.md" if session_id else f"report-{timestamp}.md"
@@ -35,6 +38,13 @@ async def generate_report(
         f"## 摘要\n发现问题：{len(findings)}\n"
         f"已探索页面：{len(visited_urls) if visited_urls else 0}\n"
     )
+    if run_summary:
+        labels = {"completed": "正常结束", "step_limit": "达到本次步数上限", "failed": "运行失败（部分结果）",
+                  "cancelled": "用户中断（部分结果）"}
+        reason = run_summary.get("terminationReason", "failed")
+        content += (f"运行结果：{labels.get(reason, reason)}\n"
+                    f"本次步数：{run_summary.get('steps', 0)}\n"
+                    f"失败步数：{run_summary.get('failedSteps', 0)}\n")
     if visited_urls:
         content += "\n## 已访问页面\n"
         for url in visited_urls:
@@ -61,9 +71,7 @@ async def generate_report(
             if finding.get("screenshot"):
                 content += f"**截图**：\n![]({finding['screenshot']})\n"
             content += "\n---\n"
-    try:
-        Path(path).write_text(content, encoding="utf-8")
-        return path
-    except Exception as error:  # noqa: BLE001 - source logs and returns empty path
-        print("写入报告失败：", error)
-        return ""
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(content, encoding="utf-8")
+    return path

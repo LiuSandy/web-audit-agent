@@ -13,9 +13,9 @@ _LAYOUT_CALLBACK = r'''
   const enabled = (h) => !opts.heuristics || opts.heuristics.length === 0 || opts.heuristics.includes(h);
   const getSelector = (el) => {
     if (el.id)
-      return `#${el.id}`;
+      return `#${CSS.escape(el.id)}`;
     if (el.className && typeof el.className === "string") {
-      const cls = el.className.split(/\s+/).filter(Boolean).join(".");
+      const cls = el.className.split(/\s+/).filter(Boolean).map(c => CSS.escape(c)).join(".");
       if (cls)
         return `${el.tagName.toLowerCase()}.${cls}`;
     }

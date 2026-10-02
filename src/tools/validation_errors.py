@@ -27,11 +27,11 @@ async def find_validation_errors(page: Page) -> list[ValidationErrorFinding]:
         '.text-red-500', '.text-red-600',
       ];
       const getSelector = (el) => {
-        if (el.id) return `#${el.id}`;
+        if (el.id) return `#${CSS.escape(el.id)}`;
         let path = el.tagName.toLowerCase();
         if (el.className) {
           const classes = el.className.split(" ").filter(c => c.trim());
-          if (classes.length > 0) path += `.${classes.join(".")}`;
+          if (classes.length > 0) path += `.${classes.map(c => CSS.escape(c)).join(".")}`;
         }
         return path;
       };

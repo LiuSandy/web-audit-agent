@@ -12,11 +12,11 @@ async def find_broken_images(page: Page) -> list[BrokenImageFinding]:
     logger.log("正在检查页面中的破损图片……")
     findings = await page.evaluate("""async () => {
       const getSelector = (el) => {
-        if (el.id) return `#${el.id}`;
+        if (el.id) return `#${CSS.escape(el.id)}`;
         let path = el.tagName.toLowerCase();
         if (el.className && typeof el.className === 'string') {
           const classes = el.className.split(/\\s+/).filter(c => c.length > 0);
-          if (classes.length > 0) path += `.${classes.join(".")}`;
+          if (classes.length > 0) path += `.${classes.map(c => CSS.escape(c)).join(".")}`;
         }
         const parent = el.parentElement;
         if (parent) {
@@ -26,10 +26,10 @@ async def find_broken_images(page: Page) -> list[BrokenImageFinding]:
             path += `:nth-of-type(${index})`;
           }
           let parentPath = parent.tagName.toLowerCase();
-          if (parent.id) parentPath = `#${parent.id}`;
+          if (parent.id) parentPath = `#${CSS.escape(parent.id)}`;
           else if (parent.className && typeof parent.className === 'string') {
             const classes = parent.className.split(/\\s+/).filter(c => c.length > 0);
-            if (classes.length > 0) parentPath += `.${classes.join(".")}`;
+            if (classes.length > 0) parentPath += `.${classes.map(c => CSS.escape(c)).join(".")}`;
           }
           path = `${parentPath} > ${path}`;
         }

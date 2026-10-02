@@ -25,9 +25,14 @@ def report_command(
     list_sessions: bool = typer.Option(False, "--list", help="列出历史会话"),
     base_url: str | None = typer.Option(None, "--base-url", help="站点地址（无法从发现推导时必填）"),
 ):
-    repository = SessionRepository(AppDatabase.get_instance().get_database())
+    try:
+        repository = SessionRepository(AppDatabase.get_instance().get_database())
+        sessions = repository.list_sessions() if list_sessions else None
+        state = repository.load_state(session_id) if session_id and not list_sessions else None
+    except Exception as error:
+        typer.secho(f"读取会话失败：{error}", err=True)
+        raise typer.Exit(RUN_FAILED)
     if list_sessions:
-        sessions = repository.list_sessions()
         if not sessions:
             typer.echo("暂无历史会话。")
             raise typer.Exit(OK)
@@ -37,19 +42,20 @@ def report_command(
     if not session_id:
         typer.secho("用法错误：请提供会话 ID，或使用 --list 查看历史会话。", err=True)
         raise typer.Exit(USAGE)
-    state = repository.load_state(session_id)
     if state is None:
         typer.secho(f"未找到会话：{session_id}（用 --list 查看历史会话）", err=True)
         raise typer.Exit(USAGE)
     findings = list(state.get("findings") or [])
-    resolved_base_url = base_url or derive_base_url(findings)
+    resolved_base_url = base_url or state.get("baseUrl") or derive_base_url(findings)
     if not resolved_base_url:
         typer.secho("用法错误：该会话没有可推导的站点地址，请用 --base-url 提供（示例：report <id> --base-url https://example.com）",
                     err=True)
         raise typer.Exit(USAGE)
     visited = list(state.get("visitedUrls") or [])
     try:
-        report_path = asyncio.run(generate_report(findings, visited, session_id, resolved_base_url))
+        report_path = asyncio.run(generate_report(findings, visited, session_id, resolved_base_url, run_summary=state.get("lastRun")))
+        if not report_path:
+            raise RuntimeError("报告生成未返回有效路径")
     except Exception as error:
         typer.secho(f"报告生成失败：{error}", err=True)
         raise typer.Exit(RUN_FAILED)

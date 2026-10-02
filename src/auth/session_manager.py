@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import sys
 import json
 import sqlite3
 import time
@@ -56,7 +57,7 @@ class SessionManager:
                     }""", state["origins"])
             return True
         except Exception as error:  # noqa: BLE001 - preserve source catch
-            print("恢复会话失败：", error)
+            print("恢复会话失败：", error, file=sys.stderr)
             return False
 
     def close(self) -> None:

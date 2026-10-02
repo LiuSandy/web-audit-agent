@@ -154,7 +154,7 @@ async def test_explore_stops_agent_when_cancelled():
 
 @pytest.mark.asyncio
 async def test_finish_session_returns_report_and_generated_tests(monkeypatch):
-    async def fake_report(findings, visited, session_id, base_url):
+    async def fake_report(findings, visited, session_id, base_url, **kwargs):
         return "reports/fake.md"
 
     monkeypatch.setattr("src.cli.core.runner.generate_report", fake_report)
@@ -166,7 +166,7 @@ async def test_finish_session_returns_report_and_generated_tests(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_finish_session_swallows_test_generation_failure(monkeypatch):
-    async def fake_report(findings, visited, session_id, base_url):
+    async def fake_report(findings, visited, session_id, base_url, **kwargs):
         return "reports/fake.md"
 
     monkeypatch.setattr("src.cli.core.runner.generate_report", fake_report)
@@ -189,7 +189,7 @@ def fake_run_env(monkeypatch):
     agent = FakeAgent(steps=[STEP_A, STEP_B])
     report_calls = []
 
-    async def fake_report(findings, visited, session_id, base_url):
+    async def fake_report(findings, visited, session_id, base_url, **kwargs):
         report_calls.append({"sessionId": session_id, "baseUrl": base_url})
         return "reports/fake.md"
 
@@ -284,7 +284,7 @@ def test_report_list_sessions(fake_repo):
 def test_report_regenerates_from_state_and_derives_base_url(fake_repo, monkeypatch):
     calls = []
 
-    async def fake_report(findings, visited, session_id, base_url):
+    async def fake_report(findings, visited, session_id, base_url, **kwargs):
         calls.append(base_url)
         return "reports/r.md"
 
@@ -303,7 +303,7 @@ def test_report_requires_base_url_when_not_derivable(fake_repo):
 def test_report_accepts_explicit_base_url(fake_repo, monkeypatch):
     calls = []
 
-    async def fake_report(findings, visited, session_id, base_url):
+    async def fake_report(findings, visited, session_id, base_url, **kwargs):
         calls.append(base_url)
         return "reports/r2.md"
 

@@ -35,7 +35,7 @@ class SessionRepository:
             """, {"id": session_id, "state": serialized_state})
             logger.info(f"已保存会话状态：{session_id}")
         except Exception as error:  # noqa: BLE001 - preserve source catch
-            logger.error(f"保存会话 {session_id} 的状态失败：{error}")
+            raise RuntimeError(f"保存会话 {session_id} 的状态失败：{error}") from error
 
     def load_state(self, session_id: str) -> dict[str, Any] | None:
         try:
@@ -54,8 +54,7 @@ class SessionRepository:
             logger.info(f"已加载会话状态：{session_id}")
             return state
         except Exception as error:  # noqa: BLE001 - preserve source catch
-            logger.error(f"加载会话 {session_id} 的状态失败：{error}")
-            return None
+            raise RuntimeError(f"加载会话 {session_id} 的状态失败：{error}") from error
 
     def list_sessions(self) -> list[str]:
         try:
@@ -64,5 +63,4 @@ class SessionRepository:
             ).fetchall()
             return [row["id"] for row in rows]
         except Exception as error:  # noqa: BLE001 - preserve source catch
-            logger.error(f"列出会话失败：{error}")
-            return []
+            raise RuntimeError(f"列出会话失败：{error}") from error

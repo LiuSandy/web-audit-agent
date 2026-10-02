@@ -20,7 +20,7 @@ class FakeAgent:
         self.generated = [{"name": "test_demo", "priority": "high", "testType": "smoke",
                            "filePath": "generated-tests/demo_spec.py"}]
         self.findings = [{"type": "console_error", "severity": "medium", "url": "https://x/2",
-                          "description": "控制台错误：示例", "selector": "", "occurrences": 1}]
+                          "description": "控制台错误：示例", "selector": "", "occurrences": []}]
 
     async def start(self):
         self.started = True

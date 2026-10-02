@@ -1,5 +1,6 @@
 """TOTP multi-factor authentication code handling."""
 
+import sys
 import pyotp
 from playwright.async_api import Page
 
@@ -24,8 +25,8 @@ class MFAHandler:
                 return True
             return False
         except Exception as error:  # noqa: BLE001 - source returns false on any failure
-            print("处理 TOTP 验证码失败：", error)
+            print("处理 TOTP 验证码失败：", error, file=sys.stderr)
             return False
 
     async def handle_sms(self, _page: Page) -> None:
-        print("遇到短信多因素认证；如无法自动处理，请人工完成验证。")
+        print("遇到短信多因素认证；如无法自动处理，请人工完成验证。", file=sys.stderr)

@@ -1,16 +1,17 @@
 """交互向导：流程与提示文案对齐旧 main()（spec §10 基线），渲染层换 rich。"""
 import asyncio
+from contextlib import aclosing
 from pathlib import Path
 
 import questionary
 from rich.markup import escape
 from rich.panel import Panel
 
-from src.agents.exploratory import ExploratoryAgent
+from src.agents.exploratory import ExploratoryAgent, SessionTargetError
 from src.auth.credential_provider import CredentialProvider
-from src.cli.core.config import RunOptions, build_config, new_session_id
+from src.cli.core.config import RunOptions, build_config, new_session_id, validate_options
 from src.cli.core.console import console, diagnostics, findings_table, friendly_hint, render_step
-from src.cli.core.exits import INTERRUPTED, OK, RUN_FAILED
+from src.cli.core.exits import INTERRUPTED, OK, RUN_FAILED, USAGE
 from src.cli.core.runner import StopExploration, explore, finish_session
 from src.database.database import AppDatabase
 from src.repositories.session_repository import SessionRepository
@@ -42,8 +43,8 @@ async def _select(message: str, choices: list) -> object:
     return result
 
 
-def _int_or_default(raw: str, fallback: int) -> int:
-    return int(raw) if raw.isdigit() and int(raw) else fallback
+def _int_or_default(raw: str, fallback: int, allow_zero: bool = False) -> int:
+    return int(raw) if raw.isdigit() and (int(raw) or allow_zero) else fallback
 
 
 async def _collect_options() -> RunOptions:
@@ -62,7 +63,7 @@ async def _collect_options() -> RunOptions:
         if await _confirm("配置高级测试选项？"):
             max_concurrency = _int_or_default(await _text("最大并行测试数：", "4"), 4)
             timeout_ms = _int_or_default(await _text("测试超时时间（毫秒）：", "30000"), 30000)
-            retry_count = _int_or_default(await _text("失败后的重试次数：", "2"), 2)
+            retry_count = _int_or_default(await _text("失败后的重试次数：", "2"), 2, allow_zero=True)
     db = AppDatabase.get_instance()
     repository = SessionRepository(db.get_database())
     existing = repository.list_sessions()[:5]
@@ -157,37 +158,66 @@ def _show_epilogue(agent, report_path: str, generated: list | None) -> None:
 
 async def run_wizard() -> int:
     console.print(Panel("✨ 欢迎使用网站探索测试工具 ✨"))
-    options = await _collect_options()
-    config = build_config(options)
-    agent = ExploratoryAgent(config)
-    step_index = 0
+    try:
+        options = await _collect_options()
+        usage_error = validate_options(options)
+        if usage_error:
+            diagnostics.print(usage_error, markup=False)
+            return USAGE
+        config = build_config(options)
+        agent = ExploratoryAgent(config)
+    except WizardCancelled:
+        return OK
+    except Exception as error:
+        diagnostics.print(friendly_hint(error), markup=False)
+        return RUN_FAILED
+    exit_code = OK
+    errors = []
+    reason = "failed"
     try:
         console.print("正在启动测试代理和浏览器……")
-        async for result in explore(agent, _make_guidance_menu(agent, options)):
-            step_index += 1
-            render_step(step_index, result, 0, console)
-            console.print(f"原因：{escape(result.get('reason', ''))}")
-        console.print("测试代理已结束探索。正在生成报告……")
-        report_path, generated = await finish_session(agent, config, options.generate_tests)
-        _show_epilogue(agent, report_path, generated)
-    except WizardCancelled:
-        # 步间菜单取消：先存已收集的发现（对齐旧 main 的 answer is None 分支）
-        try:
-            report_path, generated = await finish_session(agent, config, options.generate_tests)
-        except Exception as error:
-            diagnostics.print(f"[yellow]取消时保存报告失败：{error}[/yellow]")
-            diagnostics.print(f"[red]严重错误：{friendly_hint(error)}[/red]")
-            return RUN_FAILED
-        _show_epilogue(agent, report_path, generated)
-    except asyncio.CancelledError:
-        console.print("⚠️ 用户已取消，正在保存报告……")
-        try:
-            report_path, _generated = await finish_session(agent, config, False)
-            _show_epilogue(agent, report_path, None)
-        except Exception as error:
-            diagnostics.print(f"[yellow]取消时保存报告失败：{error}[/yellow]")
-        return INTERRUPTED
+        async with aclosing(explore(agent, _make_guidance_menu(agent, options),
+                                    max_steps=options.max_steps, max_failures=options.max_failures)) as steps:
+            async for result in steps:
+                render_step(agent.run_summary["steps"], result, options.max_steps, console)
+                console.print(f"原因：{escape(result.get('reason', ''))}")
+        reason = agent.run_summary["terminationReason"]
+    except (WizardCancelled, asyncio.CancelledError, KeyboardInterrupt):
+        reason, exit_code = "cancelled", INTERRUPTED
+    except SessionTargetError as error:
+        errors.append(str(error))
+        exit_code = USAGE
     except Exception as error:
-        diagnostics.print(f"[red]严重错误：{friendly_hint(error)}[/red]")
-        return RUN_FAILED
-    return OK
+        errors.append(friendly_hint(error))
+        exit_code = RUN_FAILED
+    agent.run_summary["terminationReason"] = reason
+    report_path = None
+    if exit_code != USAGE:
+        try:
+            report_path, generated = await finish_session(agent, config, options.generate_tests and exit_code == OK)
+            _show_epilogue(agent, report_path, generated)
+        except (asyncio.CancelledError, KeyboardInterrupt):
+            reason, exit_code = "cancelled", INTERRUPTED
+            agent.run_summary["terminationReason"] = reason
+            try:
+                report_path, generated = await finish_session(agent, config, False)
+            except Exception as error:
+                errors.append(f"中断时保存报告失败：{error}")
+        except Exception as error:
+            errors.append(f"报告生成失败：{error}")
+            if exit_code != INTERRUPTED:
+                reason, exit_code = "failed", RUN_FAILED
+        if getattr(agent, "session_ready", False):
+            agent.state["lastRun"] = {**agent.run_summary, "terminationReason": reason,
+                                      "errors": errors.copy(), "reportPath": report_path}
+            try:
+                agent.save_state()
+            except Exception as error:
+                errors.append(str(error))
+                if exit_code != INTERRUPTED:
+                    exit_code = RUN_FAILED
+    for error in errors:
+        diagnostics.print(f"[red]{escape(error)}[/red]")
+    if exit_code == OK:
+        console.print("已达到本次步数上限。" if reason == "step_limit" else "探索完成。")
+    return exit_code

@@ -1,5 +1,6 @@
 """CLI 选项到 agent 配置的纯函数转换（无 I/O，直接单测）。"""
 import uuid
+from urllib.parse import urlparse
 from dataclasses import dataclass
 
 
@@ -9,6 +10,7 @@ class RunOptions:
 
     base_url: str = ""
     max_steps: int = 50
+    max_failures: int = 3
     autonomous: bool = True
     session_id: str | None = None
     verbose: bool = False
@@ -43,6 +45,7 @@ def build_config(options: RunOptions) -> dict:
     return {
         "baseUrl": options.base_url,
         "maxSteps": options.max_steps,
+        "maxFailures": options.max_failures,
         "sessionId": options.session_id or new_session_id(),
         "auth": build_auth(options),
         "enableTestGeneration": options.generate_tests,
@@ -67,3 +70,24 @@ def validate_auth(options: RunOptions) -> str | None:
     if options.auth_app_identifier and not password_given:
         return "--auth-app-identifier 需要搭配 --auth-password，或改用 --use-saved-credentials"
     return None
+
+
+def validate_options(options: RunOptions) -> str | None:
+    try:
+        url = urlparse(options.base_url)
+        if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password:
+            return "目标地址必须是有效的 HTTP/HTTPS URL，且不能包含登录凭据"
+        url.port
+    except ValueError:
+        return "目标地址无效"
+    for name, value in (("max-steps", options.max_steps), ("max-failures", options.max_failures),
+                        ("max-concurrency", options.max_concurrency), ("timeout", options.timeout_ms)):
+        if value < 1:
+            return f"--{name} 必须为正整数"
+    if options.retry_count < 0:
+        return "--retry-count 不能为负数"
+    if options.test_mode not in ("dry-run", "sequential", "parallel"):
+        return "--test-mode 仅支持 dry-run | sequential | parallel"
+    if options.session_id and any(c in options.session_id for c in ("/", "\\", "\x00")):
+        return "会话 ID 不能包含路径分隔符或空字符"
+    return validate_auth(options)

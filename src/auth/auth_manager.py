@@ -18,6 +18,8 @@ class AuthenticationManager:
             if await self.is_authenticated(page):
                 return {"success": True, "method": "session-reuse"}
             restored = await self.session_manager.restore_session(page, app_identifier)
+            if restored:
+                await page.reload()
             if restored and await self.is_authenticated(page):
                 return {"success": True, "method": "session-restore"}
             login_flow = await self.login_detector.detect(page)
