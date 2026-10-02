@@ -1,5 +1,7 @@
 """Shared exploration lifecycle and run outcome for CLI and wizard."""
 import asyncio
+from pathlib import Path
+import shutil
 from collections.abc import AsyncIterator
 
 from rich.markup import escape
@@ -94,7 +96,8 @@ async def finish_session(agent, config: dict, generate_tests: bool) -> tuple[str
     """Required report errors propagate; optional test generation only warns."""
     report_path = await generate_report(agent.get_findings(), agent.get_visited_urls(),
                                        config["sessionId"], config["baseUrl"],
-                                       run_summary=getattr(agent, "run_summary", None))
+                                       run_summary=getattr(agent, "run_summary", None),
+                                       artifact_dir=config.get("artifactDir"), run_id=config.get("runId"))
     if not report_path:
         raise RuntimeError("报告生成未返回有效路径")
     generated = None
@@ -103,4 +106,13 @@ async def finish_session(agent, config: dict, generate_tests: bool) -> tuple[str
             generated = await agent.generate_tests()
         except Exception as error:
             diagnostics.print(f"[yellow]测试生成失败：{escape(str(error))}[/yellow]")
+    if hasattr(agent, "save_run"):
+        agent.save_run(report_path)
+    if config.get("exportDir"):
+        destination = Path(config["exportDir"]).expanduser().absolute() / config["sessionId"] / config["runId"]
+        destination = destination.resolve()
+        source = Path(config["artifactDir"]).resolve()
+        if destination == source or destination.is_relative_to(source) or source.is_relative_to(destination):
+            raise ValueError("导出目录不能与原始产物目录重叠")
+        shutil.copytree(source, destination, dirs_exist_ok=True)
     return report_path, generated

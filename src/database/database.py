@@ -6,22 +6,33 @@ import sqlite3
 from pathlib import Path
 from typing import ClassVar
 
+from src.runtime import get_runtime, ensure_home, private_directory
+
 
 class AppDatabase:
     instance: ClassVar[AppDatabase | None] = None
 
-    def __init__(self, db_path: str = "qa-agent.sqlite") -> None:
+    def __init__(self, db_path: str | None = None) -> None:
+        if db_path is None:
+            ensure_home()
+            db_path = str(get_runtime().database)
+        self.db_path = db_path
         directory = Path(db_path).parent
         if str(directory) != "." and not directory.exists():
-            directory.mkdir(parents=True)
+            private_directory(directory)
         self.db = sqlite3.connect(db_path, isolation_level=None)
+        if db_path != ":memory:":
+            Path(db_path).chmod(0o600)
         self.db.row_factory = sqlite3.Row
         self.initialize_schema()
 
     @classmethod
     def get_instance(cls, db_path: str | None = None) -> AppDatabase:
+        expected = db_path or str(get_runtime().database)
+        if cls.instance is not None and cls.instance.db_path not in (expected, ":memory:"):
+            cls.instance.close()
         if cls.instance is None:
-            cls.instance = cls(db_path if db_path is not None else "qa-agent.sqlite")
+            cls.instance = cls(db_path)
         return cls.instance
 
     def initialize_schema(self) -> None:
@@ -29,6 +40,17 @@ class AppDatabase:
             CREATE TABLE IF NOT EXISTS agent_sessions (
                 id TEXT PRIMARY KEY,
                 state TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        self.db.execute("""
+            CREATE TABLE IF NOT EXISTS agent_runs (
+                id TEXT PRIMARY KEY,
+                session_id TEXT NOT NULL,
+                artifact_dir TEXT NOT NULL,
+                report_path TEXT,
+                summary TEXT NOT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP
             )

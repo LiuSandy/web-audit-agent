@@ -16,6 +16,7 @@ from src.cli.core.runner import StopExploration, explore, finish_session
 from src.database.database import AppDatabase
 from src.repositories.session_repository import SessionRepository
 from src.utils.logger import set_verbose
+from src.runtime import get_runtime
 
 
 class WizardCancelled(Exception):
@@ -94,6 +95,8 @@ async def _collect_options() -> RunOptions:
             if auth_password is None:
                 raise WizardCancelled()
     return RunOptions(base_url=base_url, autonomous=autonomous, verbose=verbose,
+                      max_steps=get_runtime().settings["run"].get("max_steps", 50),
+                      max_failures=get_runtime().settings["run"].get("max_failures", 3),
                       session_id=session_id, generate_tests=generate_tests, test_mode=test_mode,
                       max_concurrency=max_concurrency, timeout_ms=timeout_ms, retry_count=retry_count,
                       auth_email=auth_email, auth_password=auth_password,
@@ -153,7 +156,7 @@ def _show_epilogue(agent, report_path: str, generated: list | None) -> None:
     if findings:
         findings_table(findings, console)
     if generated:
-        console.print("📁 测试文件：./generated-tests/ · 📄 执行报告：./reports/")
+        console.print(f"📁 测试文件：{agent.config['testOutputDir']}")
 
 
 async def run_wizard() -> int:
@@ -212,6 +215,8 @@ async def run_wizard() -> int:
                                       "errors": errors.copy(), "reportPath": report_path}
             try:
                 agent.save_state()
+                if hasattr(agent, "save_run"):
+                    agent.save_run(report_path)
             except Exception as error:
                 errors.append(str(error))
                 if exit_code != INTERRUPTED:

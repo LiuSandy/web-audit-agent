@@ -51,11 +51,13 @@ VS Code 的 `servers` 配置可使用相同的 `command`、`args`、`cwd` 和 `e
 
 | 资源 | 用途 |
 |---|---|
-| `test-report://{sessionId}` | 读取 `reports/report-{sessionId}.md` |
-| `test-report://latest` | 读取 `reports/` 中最近的 Markdown 报告 |
+| `test-report://{sessionId}` | 读取统一数据目录中该会话最近一次运行的报告 |
+| `test-report://latest` | 显式读取运行索引中最近一次运行的报告；指定会话不存在时不会回退到此资源 |
 
 资源处理器只读取已有文件，不负责生成报告。命令行探索结束时会生成报告；通过 MCP 启动的会话应按实际调用流程确认报告是否已创建。
 
 ## 主要实现文件
 
 `src/mcp/index.py`、`src/mcp/server.py`、`src/mcp/tools/`、`src/mcp/resources/reports.py`、`src/agents/` 和 `src/repositories/session_repository.py`。
+
+MCP 与 CLI 共用 `~/.config/webaudit/`，支持 `WEBAUDIT_HOME` 和 `WEBAUDIT_DATA_DIR`。不隐式读取 `.env`；通过 CLI 的 `--env-file` 显式加载或由客户端传递环境变量。详细规则见 [CLI 配置与存储](cli-storage.md)。

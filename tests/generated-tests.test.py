@@ -59,7 +59,7 @@ def test_home_page(page):
     assert Path(tests[0]["filePath"]).is_file()
     results = await executor.execute_tests(tests)
     assert results[0]["success"], results[0]["output"]
-    result = CliRunner().invoke(app, ["test"])
+    result = CliRunner().invoke(app, ["test", "generated-tests"])
     assert result.exit_code == 0
 
 

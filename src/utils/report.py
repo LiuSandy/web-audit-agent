@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
+import hashlib
+import shutil
+
+from src.runtime import get_runtime, new_run_id, private_directory, validate_identifier
 from urllib.parse import urlparse
 
 from src.types.index import AgentFinding
@@ -16,13 +20,17 @@ async def generate_report(
     session_id: str | None = None,
     base_url: str | None = None,
     run_summary: dict | None = None,
+    artifact_dir: str | None = None,
+    run_id: str | None = None,
 ) -> str:
-    if session_id and any(c in session_id for c in ("/", "\\", "\x00")):
-        raise ValueError("会话 ID 不能包含路径分隔符或空字符")
-    timestamp = datetime.now(UTC).isoformat(timespec="milliseconds").replace("+00:00", "Z")
-    timestamp = timestamp.replace(":", "-").replace(".", "-")
-    filename = f"report-{session_id}.md" if session_id else f"report-{timestamp}.md"
-    path = f"reports/{filename}"
+    session_id = session_id or "anonymous"
+    validate_identifier(session_id)
+    run_id = run_id or new_run_id()
+    validate_identifier(run_id)
+    directory = Path(artifact_dir) if artifact_dir else get_runtime().run_dir(session_id, run_id)
+    directory = directory.absolute()
+    private_directory(directory)
+    path = str(directory / "report.md")
     target = base_url or "未知"
     if not base_url and visited_urls:
         first_url = visited_urls[0]
@@ -69,7 +77,21 @@ async def generate_report(
             if finding.get("selector"):
                 content += f"**元素选择器**：`{finding['selector']}`\n"
             if finding.get("screenshot"):
-                content += f"**截图**：\n![]({finding['screenshot']})\n"
+                source = Path(finding["screenshot"])
+                if not source.is_absolute():
+                    source = directory / source
+                if source.is_file():
+                    screenshots = directory / "screenshots"
+                    private_directory(screenshots)
+                    if source.parent == screenshots:
+                        destination = source
+                    else:
+                        prefix = hashlib.sha256(str(source).encode()).hexdigest()[:12]
+                        destination = screenshots / f"{prefix}-{source.name}"
+                        shutil.copy2(source, destination)
+                    content += f"**截图**：\n![](screenshots/{destination.name})\n"
+                else:
+                    content += "**截图**：文件不可用\n"
             content += "\n---\n"
     output = Path(path)
     output.parent.mkdir(parents=True, exist_ok=True)

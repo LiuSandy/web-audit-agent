@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-import sys
 import json
 import os
 import sqlite3
 import time
-from pathlib import Path
 from typing import NotRequired, TypedDict
+
+from src.runtime import get_runtime, ensure_home, write_private
 
 from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
@@ -27,7 +27,13 @@ class CredentialStorage:
 
     def __init__(self, db: sqlite3.Connection) -> None:
         self.db = db
-        self.encryption_key = self.get_or_create_encryption_key()
+        self._encryption_key = None
+
+    @property
+    def encryption_key(self):
+        if self._encryption_key is None:
+            self._encryption_key = self.get_or_create_encryption_key()
+        return self._encryption_key
 
     def get_or_create_encryption_key(self) -> bytes:
         key_env = os.environ.get("CREDENTIAL_ENCRYPTION_KEY")
@@ -37,22 +43,18 @@ class CredentialStorage:
             except ValueError:
                 pass
 
-        key_path = Path.cwd() / self.KEY_FILE
+        key_path = get_runtime().credentials / self.KEY_FILE
         if key_path.exists():
             try:
                 key_hex = key_path.read_text(encoding="utf-8").strip()
                 if len(key_hex) == 64:
                     return bytes.fromhex(key_hex)
-            except Exception as error:  # noqa: BLE001 - preserve source catch
-                print(f"读取密钥文件失败：{error}", file=sys.stderr)
-
+            except Exception as error:
+                raise RuntimeError("无法读取凭据加密密钥，拒绝生成替代密钥") from error
+            raise ValueError("凭据加密密钥格式无效")
         key = os.urandom(32)
-        try:
-            descriptor = os.open(key_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-            with os.fdopen(descriptor, "w", encoding="utf-8") as file:
-                file.write(key.hex())
-        except Exception:  # noqa: BLE001 - preserve source catch
-            print("⚠️  Could not save encryption key to file. Credentials will be lost on exit.", file=sys.stderr)
+        ensure_home()
+        write_private(key_path, key.hex())
         return key
 
     async def set(self, app_identifier: str, credentials: Credentials) -> None:

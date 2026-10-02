@@ -64,3 +64,18 @@ class SessionRepository:
             return [row["id"] for row in rows]
         except Exception as error:  # noqa: BLE001 - preserve source catch
             raise RuntimeError(f"列出会话失败：{error}") from error
+
+    def save_run(self, session_id, run_id, artifact_dir, report_path, summary):
+        self.db.execute("""
+            INSERT INTO agent_runs (id, session_id, artifact_dir, report_path, summary)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET report_path=COALESCE(excluded.report_path, agent_runs.report_path),
+                summary=excluded.summary, updated_at=CURRENT_TIMESTAMP
+        """, (run_id, session_id, str(artifact_dir), report_path, json.dumps(summary, ensure_ascii=False)))
+
+    def latest_run(self, session_id):
+        row = self.db.execute("SELECT * FROM agent_runs WHERE session_id=? ORDER BY rowid DESC LIMIT 1", (session_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_runs(self):
+        return [dict(row) for row in self.db.execute("SELECT * FROM agent_runs ORDER BY rowid DESC").fetchall()]

@@ -3,6 +3,7 @@
 import json
 import os
 import time
+from pathlib import Path
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langsmith import traceable
@@ -10,6 +11,9 @@ from playwright.async_api import async_playwright
 
 from src.auth.auth_manager import AuthenticationManager
 from src.database.database import AppDatabase
+from src.runtime import get_runtime, new_run_id
+from src.utils.report import generate_report
+from src.repositories.session_repository import SessionRepository
 from src.services.llm import get_default_model
 from src.tools.broken_images import find_broken_images
 from src.tools.console_errors import ConsoleMonitor
@@ -47,6 +51,9 @@ class SinglePageTestingAgent:
                       "currentTestIndex": -1, "status": "planning",
                       "currentAction": "正在初始化……", "lastError": None,
                       "startTime": now_ms()}
+        self.config["runId"] = new_run_id()
+        self.config["artifactDir"] = str(get_runtime().run_dir(sid, self.config["runId"]))
+        self.state["runId"] = self.config["runId"]
         self.stopping = False
         self.console_monitor = None
         self.network_monitor = None
@@ -93,6 +100,17 @@ class SinglePageTestingAgent:
             await self.run_visual_regression(self.page)
             self.state["currentAction"] = "已完成"
             self.state["endTime"] = now_ms()
+            findings = [finding for result in self.state["results"] for finding in result.get("findings", [])]
+            report_path = await generate_report(findings, [self.config["targetUrl"]], self.state["sessionId"],
+                                                self.config["targetUrl"], artifact_dir=self.config["artifactDir"],
+                                                run_id=self.config["runId"])
+            self.state["reportPath"] = report_path
+            repository = SessionRepository(AppDatabase.get_instance().get_database())
+            repository.save_run(self.state["sessionId"], self.config["runId"], self.config["artifactDir"],
+                                report_path, {"status": self.state["status"]})
+            repository.save_state(self.state["sessionId"], {"baseUrl": self.config["targetUrl"], "findings": findings,
+                "visitedUrls": {self.config["targetUrl"]}, "steps": 0, "history": [], "todoQueue": [],
+                "runId": self.config["runId"], "artifactDir": self.config["artifactDir"], "agentType": "single_page"})
             return self.get_state()
         except Exception as error:
             self.state["status"] = "failed"
@@ -313,7 +331,7 @@ class SinglePageTestingAgent:
             self.state["currentAction"] = "正在检查页面布局……"
             findings = await run_layout_audit(page, {"maxElements": config.get("maxElements", 300),
                                                    "heuristics": config.get("heuristics"),
-                                                   "screenshots": config.get("screenshots"),
+                                                   "screenshots": {"outputDir": str(Path(self.config["artifactDir"]) / "screenshots"), **(config.get("screenshots") or {})},
                                                    "sessionId": self.state["sessionId"]})
             for f in findings:
                 self.state["results"].append({"testCaseId": "layout-audit",
@@ -333,9 +351,9 @@ class SinglePageTestingAgent:
         try:
             self.state["currentAction"] = "正在检查视觉差异……"
             vr_config = {"enabled": True,
-                "baselineDir": config.get("baselineDir") or "./test-results/baselines",
-                "currentDir": config.get("currentDir") or "./test-results/current",
-                "diffDir": config.get("diffDir") or "./test-results/diffs",
+                "baselineDir": config.get("baselineDir") or str(get_runtime().data / "baselines"),
+                "currentDir": config.get("currentDir") or str(Path(self.config["artifactDir"]) / "visual-current"),
+                "diffDir": config.get("diffDir") or str(Path(self.config["artifactDir"]) / "visual-diffs"),
                 "viewports": config.get("viewports") or [
                     {"width": 1920, "height": 1080, "name": "desktop"},
                     {"width": 768, "height": 1024, "name": "tablet"},

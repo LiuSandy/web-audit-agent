@@ -28,7 +28,8 @@ def test_build_config_camel_case_contract():
     assert config["maxSteps"] == 50
     assert config["auth"] is None
     assert config["enableTestGeneration"] is False
-    assert config["testOutputDir"] == "./generated-tests"
+    assert config["testOutputDir"].endswith("/generated-tests")
+    assert config["artifactDir"] in config["testOutputDir"]
     assert config["includeE2ETests"] is True
     assert config["testDryRun"] is True and config["testParallelExecution"] is False
     assert config["testMaxConcurrency"] == 4
@@ -252,6 +253,15 @@ def fake_repo(monkeypatch):
     class FakeRepo:
         def __init__(self, db):
             self.db = db
+
+        def list_runs(self):
+            return []
+
+        def latest_run(self, session_id):
+            return None
+
+        def save_run(self, *args):
+            pass
 
         def list_sessions(self):
             return ["session-1", "session-2"]

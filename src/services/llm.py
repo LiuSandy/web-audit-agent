@@ -2,14 +2,14 @@
 
 import os
 
-from dotenv import load_dotenv
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 
 from src.utils.logger import create_logger
+from src.runtime import get_runtime
+from src.runtime.secrets import get_api_key
 
 logger = create_logger("models")
-load_dotenv(override=False)
 
 
 def create_gemini_model(config=None):
@@ -35,9 +35,9 @@ def create_gemini_model(config=None):
 
 def create_openai_model(config=None):
     config = config or {}
-    api_key = config.get("apiKey") or os.environ.get("OPEN_AI_API_KEY")
-    model_name = config.get("modelName") or os.environ.get("OPEN_AI_MODEL") or "gpt-3.5-turbo"
-    base_url = config.get("baseUrl") or os.environ.get("OPEN_AI_API_URL")
+    api_key = config.get("apiKey") or (os.environ.get("OPENAI_API_KEY") or os.environ.get("OPEN_AI_API_KEY"))
+    model_name = config.get("modelName") or (os.environ.get("OPENAI_MODEL") or os.environ.get("OPEN_AI_MODEL")) or "gpt-3.5-turbo"
+    base_url = config.get("baseUrl") or (os.environ.get("OPENAI_BASE_URL") or os.environ.get("OPEN_AI_API_URL"))
     logger.info(f"正在创建 OpenAI 兼容模型：{model_name}，地址：{base_url or '默认地址'}")
     if not api_key:
         logger.warn("未找到 OPEN_AI_API_KEY；部分服务商可能需要此密钥")
@@ -50,23 +50,27 @@ def create_openai_model(config=None):
     return ChatOpenAI(**kwargs)
 
 
+def model_settings():
+    runtime = get_runtime()
+    settings = runtime.settings["llm"]
+    provider = settings.get("provider")
+    if not provider:
+        raise ValueError("未配置模型服务。请执行 webaudit config init，或设置 OPENAI_API_KEY / GOOGLE_AI_STUDIO_API_KEY")
+    key, _ = get_api_key(provider, runtime)
+    base_url = settings.get("base_url")
+    if not key and not (provider in ("openai", "openai-compatible") and base_url):
+        raise ValueError("缺少 API key。请执行 webaudit config init，或设置 OPENAI_API_KEY / GOOGLE_AI_STUDIO_API_KEY")
+    return provider, {"apiKey": key, "baseUrl": base_url,
+                      "modelName": settings.get("model") or ("gemini-2.5-flash-lite" if provider == "gemini" else "gpt-4o-mini")}
+
+
 def get_default_model():
-    logger.info("正在获取默认模型……")
-    if os.environ.get("GOOGLE_AI_STUDIO_API_KEY"):
-        logger.info("已检测到 GOOGLE_AI_STUDIO_API_KEY，使用 Gemini 模型")
-        return create_gemini_model()
-    if os.environ.get("OPEN_AI_API_KEY"):
-        logger.info("已检测到 OPEN_AI_API_KEY，使用 OpenAI 兼容模型")
-        return create_openai_model()
-    if os.environ.get("OPEN_AI_API_URL"):
-        logger.info("已检测到 OPEN_AI_API_URL，使用 OpenAI 兼容模型")
-        return create_openai_model()
-    raise ValueError("未找到可用的模型服务。请在 .env 中设置 GOOGLE_AI_STUDIO_API_KEY 或 OPEN_AI_API_KEY，也可设置 OPEN_AI_API_URL")
+    provider, settings = model_settings()
+    return create_gemini_model(settings) if provider == "gemini" else create_openai_model(settings)
 
 
 def get_default_model_name():
-    if os.environ.get("GOOGLE_AI_STUDIO_API_KEY"):
-        return os.environ.get("GEMINI_MODEL") or "gemini-2.5-flash-lite"
-    if os.environ.get("OPEN_AI_API_KEY") or os.environ.get("OPEN_AI_API_URL"):
-        return os.environ.get("OPEN_AI_MODEL") or "gpt-3.5-turbo"
-    return "unknown"
+    settings = get_runtime().settings["llm"]
+    if not settings.get("provider"):
+        return "unknown"
+    return settings.get("model") or ("gemini-2.5-flash-lite" if settings["provider"] == "gemini" else "gpt-4o-mini")

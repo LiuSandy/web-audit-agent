@@ -1,6 +1,7 @@
 """Layout audit for a page; DOM heuristics run in the browser."""
 
 from src.tools.screenshot import capture_layout_finding_screenshots
+from src.runtime import get_runtime, new_run_id, ensure_home
 from src.utils.logger import create_logger
 
 logger = create_logger("tool:layout-audit")
@@ -174,9 +175,10 @@ async def run_layout_audit(page, config=None):
     logger.log(f"页面布局检查发现 {len(findings)} 个疑似问题")
     screenshots = config.get("screenshots") or {}
     if screenshots.get("enabled") and findings:
+        ensure_home()
         logger.log("正在为布局问题截图……")
         screenshot_config = {"enabled": True,
-            "outputDir": screenshots.get("outputDir") or "./test-results/layout-audit",
+            "outputDir": screenshots.get("outputDir") or str(get_runtime().run_dir(config.get("sessionId") or "unknown", new_run_id()) / "screenshots"),
             "fullPage": True,
             "highlightElements": screenshots.get("highlightElements", True),
             "type": screenshots.get("type") or "png"}

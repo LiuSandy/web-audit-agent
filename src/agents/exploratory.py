@@ -3,6 +3,7 @@
 import asyncio
 import json
 from datetime import datetime, timezone
+from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -11,6 +12,7 @@ from playwright.async_api import async_playwright
 
 from src.auth.auth_manager import AuthenticationManager
 from src.database.database import AppDatabase
+from src.runtime import get_runtime, new_run_id, private_directory
 from src.repositories.session_repository import SessionRepository
 from src.services.llm import get_default_model
 from src.services.test_executor import TestExecutor
@@ -124,7 +126,11 @@ class ExploratoryAgent:
         self.playwright = None
         self.console_monitor = None
         self.network_monitor = None
-        self.config = config
+        self.config = dict(config)
+        self.config.setdefault("runId", new_run_id())
+        self.config.setdefault("artifactDir", str(get_runtime().run_dir(self.config.get("sessionId") or "anonymous", self.config["runId"])))
+        self.config.setdefault("testOutputDir", str(get_runtime().run_dir(self.config.get("sessionId") or "anonymous", self.config["runId"]) / "generated-tests"))
+        config = self.config
         self.model = config.get("model") or get_default_model()
         self.db = AppDatabase.get_instance()
         database = self.db.get_database()
@@ -150,6 +156,8 @@ class ExploratoryAgent:
         if self.config.get("sessionId"):
             loaded_state = self.session_repo.load_state(self.config["sessionId"])
             if loaded_state:
+                if loaded_state.get("agentType") == "single_page":
+                    raise SessionTargetError("单页测试会话不能恢复为探索会话，请使用新的会话 ID")
                 self.state = loaded_state
                 logger.info(f"已恢复会话 {self.config['sessionId']}，当前为第 {self.state['steps']} 步")
             else:
@@ -172,6 +180,8 @@ class ExploratoryAgent:
             self.config["auth"] = {"required": True, "appIdentifier": saved_config["authAppIdentifier"]}
         self.state["baseUrl"] = self.state.get("baseUrl") or self.config["baseUrl"]
         # Persist references and non-secret options only; never credentials or model objects.
+        self.state["runId"] = self.config["runId"]
+        self.state["artifactDir"] = self.config["artifactDir"]
         self.state["runConfig"] = {key: self.config.get(key) for key in (
             "maxSteps", "maxFailures", "enableTestGeneration", "testDryRun", "testParallelExecution",
             "testMaxConcurrency", "testTimeout", "testRetryCount")}
@@ -212,6 +222,12 @@ class ExploratoryAgent:
                 logger.log(f"已从 {last_url} 恢复访问")
             else:
                 await self.page.goto(self.config["baseUrl"])
+
+    def save_run(self, report_path=None):
+        if self.session_ready and self.config.get("sessionId"):
+            self.session_repo.save_run(self.config["sessionId"], self.config["runId"],
+                                       self.config["artifactDir"], report_path,
+                                       self.state.get("lastRun") or getattr(self, "run_summary", {}))
 
     def save_state(self):
         if self.config.get("sessionId") and self.session_ready:
@@ -452,10 +468,11 @@ class ExploratoryAgent:
             return ""
         timestamp = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z").replace(":", "-").replace(".", "-")
         filename = f"{prefix}-{timestamp}.png"
-        path = f"reports/screenshots/{filename}"
+        path = Path(self.config["artifactDir"]) / "screenshots" / filename
+        private_directory(path.parent)
         try:
-            await self.page.screenshot(path=path, full_page=True)
-            return f"screenshots/{filename}"
+            await self.page.screenshot(path=str(path), full_page=True)
+            return str(path)
         except Exception as error:
             logger.warn(f"截图失败，已跳过：{error}")
             return ""
@@ -497,7 +514,7 @@ class ExploratoryAgent:
                 results = await self.test_executor.execute_tests(generated_tests)
                 logger.info(f"已执行 {len(results)} 个测试")
                 timestamp = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z").replace(":", "-").replace(".", "-")
-                report_path = f"reports/test-execution-{timestamp}.md"
+                report_path = str(Path(self.config["artifactDir"]) / f"test-execution-{timestamp}.md")
                 await self.test_executor.save_test_report(results, report_path)
             return generated_tests
         except Exception as error:

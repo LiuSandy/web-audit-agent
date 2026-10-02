@@ -1,6 +1,7 @@
 """run <url>：非交互探索入口。"""
 import asyncio
 from contextlib import aclosing
+from pathlib import Path
 import json
 import time
 
@@ -13,6 +14,7 @@ from src.cli.core.console import console, diagnostics, findings_table, friendly_
 from src.cli.core.exits import INTERRUPTED, OK, RUN_FAILED, USAGE
 from src.cli.core.runner import explore, finish_session
 from src.utils.logger import set_verbose
+from src.runtime import get_runtime
 
 
 async def _execute(options: RunOptions) -> int:
@@ -59,13 +61,15 @@ async def _execute(options: RunOptions) -> int:
                                       "errors": errors.copy(), "reportPath": report_path}
             try:
                 agent.save_state()
+                if hasattr(agent, "save_run"):
+                    agent.save_run(report_path)
             except Exception as error:
                 errors.append(str(error))
                 if exit_code != INTERRUPTED:
                     reason, exit_code = "failed", RUN_FAILED
     summary = getattr(agent, "run_summary", {})
     findings = agent.get_findings() if agent is not None else []
-    payload = {"sessionId": config["sessionId"], "status": "cancelled" if reason == "cancelled" else
+    payload = {"sessionId": config["sessionId"], "runId": config["runId"], "artifactDir": config["artifactDir"], "status": "cancelled" if reason == "cancelled" else
                "failed" if exit_code != OK else "success", "terminationReason": reason,
                "reportPath": report_path, "steps": summary.get("steps", 0),
                "sessionSteps": getattr(agent, "state", {}).get("steps", summary.get("steps", 0)),
@@ -82,7 +86,7 @@ async def _execute(options: RunOptions) -> int:
         if findings:
             findings_table(findings, console)
         if generated:
-            console.print(f"已生成 {len(generated)} 个自动化测试（目录：./generated-tests/）")
+            console.print(f"已生成 {len(generated)} 个自动化测试（目录：{config['testOutputDir']}）")
     elif report_path:
         out.print(f"已保存部分结果：{escape(report_path)}")
     return exit_code
@@ -90,8 +94,8 @@ async def _execute(options: RunOptions) -> int:
 
 def run_command(
     base_url: str = typer.Argument(..., help="目标网站起始地址"),
-    max_steps: int = typer.Option(50, "--max-steps", min=1, help="本次运行的最大探索步数"),
-    max_failures: int = typer.Option(3, "--max-failures", min=1, help="连续失败步数上限"),
+    max_steps: int | None = typer.Option(None, "--max-steps", min=1, help="本次运行的最大探索步数"),
+    max_failures: int | None = typer.Option(None, "--max-failures", min=1, help="连续失败步数上限"),
     autonomous: bool = typer.Option(True, "--autonomous/--guided", help="自主/引导模式（非交互下 guided 降级为自主）"),
     session_id: str | None = typer.Option(None, "--session-id", help="恢复指定会话"),
     verbose: bool = typer.Option(False, "--verbose", help="显示诊断层输出"),
@@ -104,9 +108,13 @@ def run_command(
     test_mode: str = typer.Option("dry-run", "--test-mode", help="dry-run | sequential | parallel"),
     max_concurrency: int = typer.Option(4, "--max-concurrency", help="最大并行测试数"),
     timeout_ms: int = typer.Option(30000, "--timeout", help="单条测试超时（毫秒）"),
+    output_dir: Path | None = typer.Option(None, "--output-dir", help="导出报告、截图和测试副本"),
     retry_count: int = typer.Option(2, "--retry-count", help="测试失败重试次数"),
 ):
-    options = RunOptions(base_url=base_url, max_steps=max_steps, max_failures=max_failures, autonomous=autonomous,
+    settings = get_runtime().settings["run"]
+    max_steps = max_steps if max_steps is not None else settings.get("max_steps", 50)
+    max_failures = max_failures if max_failures is not None else settings.get("max_failures", 3)
+    options = RunOptions(output_dir=str(output_dir) if output_dir else None, base_url=base_url, max_steps=max_steps, max_failures=max_failures, autonomous=autonomous,
                          session_id=session_id, verbose=verbose, json_output=json_output,
                          auth_email=auth_email, auth_password=auth_password,
                          auth_app_identifier=auth_app_identifier,

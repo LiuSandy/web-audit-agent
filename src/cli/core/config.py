@@ -3,6 +3,8 @@ import uuid
 from urllib.parse import urlparse
 from dataclasses import dataclass
 
+from src.runtime import get_runtime, new_run_id
+
 
 @dataclass
 class RunOptions:
@@ -24,6 +26,7 @@ class RunOptions:
     max_concurrency: int = 4
     timeout_ms: int = 30000
     retry_count: int = 2
+    output_dir: str | None = None
 
 
 def new_session_id() -> str:
@@ -42,14 +45,20 @@ def build_auth(options: RunOptions) -> dict | None:
 
 def build_config(options: RunOptions) -> dict:
     """键名对齐 ExploratoryAgent 的 camelCase 契约（spec §10）。"""
+    session_id = options.session_id or new_session_id()
+    run_id = new_run_id()
+    artifact_dir = get_runtime().run_dir(session_id, run_id)
     return {
+        "runId": run_id,
+        "artifactDir": str(artifact_dir),
+        "exportDir": options.output_dir,
         "baseUrl": options.base_url,
         "maxSteps": options.max_steps,
         "maxFailures": options.max_failures,
-        "sessionId": options.session_id or new_session_id(),
+        "sessionId": session_id,
         "auth": build_auth(options),
         "enableTestGeneration": options.generate_tests,
-        "testOutputDir": "./generated-tests",
+        "testOutputDir": str(artifact_dir / "generated-tests"),
         "includeE2ETests": True,
         "testDryRun": options.test_mode == "dry-run",
         "testParallelExecution": options.test_mode == "parallel",
@@ -90,4 +99,6 @@ def validate_options(options: RunOptions) -> str | None:
         return "--test-mode 仅支持 dry-run | sequential | parallel"
     if options.session_id and any(c in options.session_id for c in ("/", "\\", "\x00")):
         return "会话 ID 不能包含路径分隔符或空字符"
+    if options.session_id in (".", ".."):
+        return "会话 ID 不能为 . 或 .."
     return validate_auth(options)

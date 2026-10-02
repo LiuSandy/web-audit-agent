@@ -8,7 +8,7 @@ WebAudit 是一个使用 Python、Playwright 和大语言模型的网站测试�
 - **发现问题**：监控控制台错误、失败的网络请求、可见的表单校验提示，并支持破损图片检查和模型记录的功能、体验问题。
 - **保存会话**：通过 SQLite 保存访问记录、待办队列和发现结果，支持恢复探索。
 - **生成测试**：根据发现的问题生成 Python Playwright 端到端测试，可仅生成、顺序执行或并行执行。
-- **输出报告**：在 `reports/` 中保存中文探索报告和测试执行报告；截图保存在 `reports/screenshots/`。
+- **输出报告**：在 `~/.config/webaudit/data/runs/<session-id>/<run-id>/` 保存报告、截图和生成测试。
 
 检测结果属于疑似问题。预期中的 4xx 响应、正常表单提示或第三方脚本错误也可能被记录，发布前应人工核实。
 
@@ -33,10 +33,10 @@ WebAudit 是一个使用 Python、Playwright 和大语言模型的网站测试�
 ~~~bash
 uv sync
 uv run python -m playwright install chromium
-cp .env.example .env
+uv run webaudit config init
 ~~~
 
-在 `.env` 中配置至少一个模型服务：`GOOGLE_AI_STUDIO_API_KEY`，或 `OPEN_AI_API_KEY`；使用兼容服务时可设置 `OPEN_AI_API_URL` 和 `OPEN_AI_MODEL`。不要提交 `.env`、`.auth.key`、SQLite 数据库、报告或生成的测试。
+初始化会询问服务商、接口、模型和密钥，默认将密钥保存到系统凭据库。也可以直接设置 `OPENAI_API_KEY` 或 `GOOGLE_AI_STUDIO_API_KEY`。配置和数据统一存放在 `~/.config/webaudit/`，安装时不会创建目录。开发用 `.env` 需显式通过 `--env-file .env` 加载，不再自动搜索。目录、自定义路径、清理和卸载规则见 [CLI 配置与存储说明](docs/cli-storage.md)。不要提交密钥、数据库或运行产物。
 
 ## 运行
 
@@ -47,7 +47,12 @@ uv run python -m src.index
 # 非交互探索（脚本 / 跑批）
 uv run python -m src.index run <url> --max-steps 10 --json
 
-# 按会话重出报告
+# 初始化与查看配置
+uv run webaudit config init
+uv run webaudit config show --sources
+uv run webaudit paths
+
+# 查看会话报告（可用 --run-id 指定历史运行）
 uv run python -m src.index report --list
 uv run python -m src.index report <session-id>
 
@@ -61,11 +66,11 @@ uv run python -m src.index mcp
 uv build && uv tool install dist/*.whl && webaudit --version
 ```
 
-运行交互向导（无子命令时的默认入口），按提示输入目标网址、选择自主或人工引导模式、决定是否生成测试，并选择新建或恢复会话。结束后，探索报告写入 `reports/report-<session-id>.md`。
+运行交互向导（无子命令时的默认入口），按提示输入目标网址、选择自主或人工引导模式、决定是否生成测试，并选择新建或恢复会话。每次运行保留独立报告，路径为 `~/.config/webaudit/data/runs/<session-id>/<run-id>/report.md`，终端会显示绝对路径。
 
 ### 运行结果与恢复约定
 
-`run --json` 的 stdout 只输出一个最终 JSON 对象，进度和错误走 stderr。运行失败、中断或模型初始化失败也会输出结果；参数校验失败在启动前返回标准用法提示。JSON 包含 `status`、`terminationReason`、`steps`（本次）、`sessionSteps`（累计）、`failedSteps`、`cleanupErrors`、`errors`、`reportPath` 和 findings。
+`run --json` 的 stdout 只输出一个最终 JSON 对象，进度和错误走 stderr。运行失败、中断或模型初始化失败也会输出结果；参数校验失败在启动前返回标准用法提示。JSON 包含 `status`、`terminationReason`、`steps`（本次）、`sessionSteps`（累计）、`failedSteps`、`cleanupErrors`、`errors`、`reportPath`、`runId`、`artifactDir` 和 findings。
 
 | 退出码 | 含义 |
 |---|---|
@@ -95,7 +100,7 @@ uv run pytest
 uv run ruff check src tests
 ~~~
 
-`pyproject.toml` 定义 pytest 的 `*.test.py` 和 `*_spec.py` 发现规则；异步浏览器测试需要 Chromium。生成的测试位于 `generated-tests/<category>/`，使用 pytest 与 Python Playwright 运行。
+`pyproject.toml` 定义 pytest 的 `*.test.py` 和 `*_spec.py` 发现规则；异步浏览器测试需要 Chromium。生成的测试位于 `<data-dir>/runs/<session-id>/<run-id>/generated-tests/<category>/`，使用 pytest 与 Python Playwright 运行。
 
 ## 设计说明
 

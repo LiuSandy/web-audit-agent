@@ -188,7 +188,7 @@ def test_session_save_failure_exits_one(run_env):
 @pytest.fixture
 def bare_agent():
     agent = object.__new__(ExploratoryAgent)
-    agent.config = {"sessionId": "test", "baseUrl": "https://example.com"}
+    agent.config = {"sessionId": "test", "baseUrl": "https://example.com", "runId": "run-test", "artifactDir": "/tmp/bare-agent-test"}
     agent.session_ready = True
     agent.state = {"steps": 0, "visitedUrls": OrderedSet(), "history": [], "todoQueue": [], "findings": []}
     agent.session_repo = SimpleNamespace(save_state=Mock())
@@ -287,7 +287,8 @@ def test_wizard_uses_failure_contract(monkeypatch, tmp_path):
         base_url="https://example.com", max_failures=1)))
     monkeypatch.setattr("src.cli.wizard.ExploratoryAgent", lambda config: agent)
     assert asyncio.run(run_wizard()) == 1
-    assert agent.stopped and list(Path("reports").glob("*.md"))
+    from src.runtime import get_runtime
+    assert agent.stopped and list(get_runtime().runs.rglob("report.md"))
 
 
 def test_cancel_during_test_generation_still_outputs_json(run_env):

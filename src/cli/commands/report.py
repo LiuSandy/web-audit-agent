@@ -1,5 +1,7 @@
 """report [session-id]：按历史会话重出报告。"""
 import asyncio
+from pathlib import Path
+import shutil
 from urllib.parse import urlparse
 
 import typer
@@ -8,6 +10,7 @@ from src.cli.core.exits import OK, RUN_FAILED, USAGE
 from src.database.database import AppDatabase
 from src.repositories.session_repository import SessionRepository
 from src.utils.report import generate_report
+from src.runtime import new_run_id, validate_identifier
 
 
 def derive_base_url(findings: list[dict]) -> str | None:
@@ -23,6 +26,8 @@ def derive_base_url(findings: list[dict]) -> str | None:
 def report_command(
     session_id: str | None = typer.Argument(None, help="会话 ID（--list 时可省略）"),
     list_sessions: bool = typer.Option(False, "--list", help="列出历史会话"),
+    run_id: str | None = typer.Option(None, "--run-id", help="查看指定历史运行"),
+    output_dir: Path | None = typer.Option(None, "--output-dir", help="导出报告及附件"),
     base_url: str | None = typer.Option(None, "--base-url", help="站点地址（无法从发现推导时必填）"),
 ):
     try:
@@ -53,9 +58,34 @@ def report_command(
         raise typer.Exit(USAGE)
     visited = list(state.get("visitedUrls") or [])
     try:
-        report_path = asyncio.run(generate_report(findings, visited, session_id, resolved_base_url, run_summary=state.get("lastRun")))
+        validate_identifier(session_id)
+        runs = repository.list_runs()
+        selected = next((r for r in runs if r["session_id"] == session_id and r["id"] == run_id), None) if run_id else repository.latest_run(session_id)
+        if run_id and not selected:
+            typer.secho(f"未找到运行：{run_id}", err=True)
+            raise typer.Exit(USAGE)
+        if selected and selected.get("report_path") and Path(selected["report_path"]).is_file():
+            report_path = selected["report_path"]
+        elif run_id:
+            raise FileNotFoundError("该历史运行的报告文件已不存在，无法从当前会话还原历史报告")
+        else:
+            regenerated_run_id = state.get("runId") or new_run_id()
+            report_path = asyncio.run(generate_report(findings, visited, session_id, resolved_base_url,
+                                                       run_summary=state.get("lastRun"),
+                                                       run_id=regenerated_run_id,
+                                                       artifact_dir=state.get("artifactDir")))
+            repository.save_run(session_id, regenerated_run_id, Path(report_path).parent,
+                                report_path, state.get("lastRun") or {})
+        if output_dir:
+            source = Path(report_path).parent.resolve()
+            destination = (output_dir.expanduser().absolute() / session_id / source.name).resolve()
+            if destination == source or destination.is_relative_to(source) or source.is_relative_to(destination):
+                raise ValueError("导出目录不能与原始产物目录重叠")
+            shutil.copytree(source, destination, dirs_exist_ok=True)
         if not report_path:
             raise RuntimeError("报告生成未返回有效路径")
+    except typer.Exit:
+        raise
     except Exception as error:
         typer.secho(f"报告生成失败：{error}", err=True)
         raise typer.Exit(RUN_FAILED)
