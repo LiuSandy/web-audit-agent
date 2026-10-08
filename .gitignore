@@ -43,3 +43,6 @@ dist/
 
 # superpowers working docs (specs/plans stay local)
 docs/superpowers/
+
+# local issue tracking (review findings stay local)
+docs/issues/
