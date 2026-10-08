@@ -53,12 +53,15 @@ def build_config(options: RunOptions) -> dict:
         "artifactDir": str(artifact_dir),
         "exportDir": options.output_dir,
         "baseUrl": options.base_url,
+        # 仅作为 runConfig 快照随会话落库；真正的循环预算由调用方经
+        # explore(max_steps=..., max_failures=...) 传入（见 runner.py）。
         "maxSteps": options.max_steps,
         "maxFailures": options.max_failures,
         "sessionId": session_id,
         "auth": build_auth(options),
         "enableTestGeneration": options.generate_tests,
         "testOutputDir": str(artifact_dir / "generated-tests"),
+        # 目前没有对应的 CLI 开关，固定开启；只有显式 False 才会关闭 E2E 生成。
         "includeE2ETests": True,
         "testDryRun": options.test_mode == "dry-run",
         "testParallelExecution": options.test_mode == "parallel",

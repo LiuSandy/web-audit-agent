@@ -83,6 +83,10 @@ class AuthOptions(TypedDict):
 
 
 class AgentConfig(TypedDict):
+    """探索 Agent 运行配置的类型契约（camelCase，MCP/落库协议兼容）。
+
+    各字段语义见 ExploratoryAgent.__init__ 的 Args 说明。
+    """
     baseUrl: str
     maxSteps: NotRequired[int]
     model: NotRequired[Any]

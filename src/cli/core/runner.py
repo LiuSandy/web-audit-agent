@@ -20,7 +20,11 @@ class ExplorationFailed(RuntimeError):
 
 async def explore(agent, get_guidance=None, pause: float = 1.0,
                   max_steps: int | None = None, max_failures: int = 3) -> AsyncIterator[dict]:
-    """Start, run and clean up; max_steps is the budget for this invocation."""
+    """启动 Agent、循环步进并清理；max_steps 是本次调用的步数预算。
+
+    循环预算在此处（函数参数），不在 agent.config：config["maxSteps"] 与
+    config["maxFailures"] 仅作为会话快照写入 runConfig。
+    """
     summary = {"terminationReason": "failed", "steps": 0, "failedSteps": 0,
                "cleanupErrors": []}
     agent.run_summary = summary

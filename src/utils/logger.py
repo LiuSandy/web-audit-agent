@@ -1,4 +1,4 @@
-"""Equivalent verbosity gates for the original Adze logger."""
+"""统一的日志门面：诊断层输出由全局 is_verbose 开关（set_verbose）控制。"""
 
 import logging
 

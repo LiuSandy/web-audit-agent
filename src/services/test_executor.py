@@ -13,6 +13,8 @@ logger = create_logger("test-executor")
 
 
 class TestExecutor:
+    """保存并执行生成的 pytest 测试；config 键来自 Agent 的 test* 配置项。"""
+
     def __init__(self, config=None):
         self.config = {"dryRun": False, "parallel": False, "maxConcurrency": 4,
                        "timeout": 30000, "retryCount": 2, **(config or {})}

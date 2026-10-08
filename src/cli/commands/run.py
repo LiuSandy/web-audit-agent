@@ -121,10 +121,12 @@ def run_command(
                          use_saved_credentials=use_saved_credentials, generate_tests=generate_tests,
                          test_mode=test_mode, max_concurrency=max_concurrency,
                          timeout_ms=timeout_ms, retry_count=retry_count)
+    # 验证参数的有效性
     usage_error = validate_options(options)
     if usage_error:
         typer.secho(f"用法错误：{usage_error}", fg=typer.colors.RED, err=True)
         raise typer.Exit(USAGE)
+
     set_verbose(options.verbose)
     if not options.autonomous:
         diagnostics.print("提示：非交互模式下 --guided 无法逐条问询，将按自主模式执行。")

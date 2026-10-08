@@ -85,7 +85,7 @@ _SNAPSHOT_CALLBACK = r'''
 '''
 
 _SYSTEM_PROMPT = r'''
-你是网站质量测试代理。探索 ${this.config.baseUrl}，操作页面并发现问题。
+你是 Web Audit Agent。探索 ${this.config.baseUrl}，操作页面并发现问题。
 请用简体中文填写所有面向用户的内容，包括 reason、record_finding 的 description；保留 JSON 字段名、动作名、问题类型、严重程度、URL 和 CSS 选择器的原值。
 
 目标：访问可发现页面，点击按钮、填写表单，尝试登录、购物等主要流程；检查功能、校验、图片、错误提示和体验问题。
@@ -119,7 +119,36 @@ class SessionTargetError(ValueError):
 
 
 class ExploratoryAgent:
+    """Web Audit Agent：LLM 驱动的探索式测试，在真实浏览器中逐步决策并发现问题。"""
+
     def __init__(self, config):
+        """初始化 Agent。config 为扁平 dict，键名保持 camelCase 协议契约。
+
+        Args:
+            baseUrl: 探索目标站点，必填。用于系统提示词、预爬起点与首次导航；
+                恢复会话时按 scheme + 主机 + 端口校验目标一致，不一致即拒绝。
+            model: LLM 模型对象，缺省用 get_default_model()。只存在于内存，
+                永不写入会话状态。
+            sessionId: 会话 ID，恢复与落库的键；缺省由入口层生成。
+            auth: 认证选项（required / appIdentifier / credentials）；恢复会话
+                时若未传，依据落库的 authAppIdentifier 重建以复用已存凭据。
+            runId: 本次运行 ID，缺省自动生成。
+            artifactDir: 本次运行产物目录 runs/<sessionId>/<runId>/，缺省自动生成。
+            exportDir: 结束后产物导出目标（由 runner.py 消费），缺省不导出。
+            maxSteps: 步数预算。仅作为 runConfig 快照随会话落库；真正的循环
+                预算由 explore(max_steps=...) 传入（见 runner.py）。
+            maxFailures: 连续失败阈值。同上，仅快照。
+            enableTestGeneration: 是否在结束时从发现的问题生成测试；同时门控
+                下方全部 test* 参数，关闭时 TestGenerator/TestExecutor 均不实例化。
+            testOutputDir: 生成测试落盘目录，缺省为运行产物目录下 generated-tests/。
+            includeE2ETests: 是否额外生成 pytest E2E 版本；仅显式 False 才关闭
+                （`is not False` 判断），当前 CLI 固定传 True。
+            testDryRun: 试运行：跳过 pytest 子进程，直接返回成功桩结果。
+            testParallelExecution: 并行执行生成测试（按 testMaxConcurrency 分块）。
+            testMaxConcurrency: 并行块大小，默认 4。
+            testTimeout: 单个测试的子进程超时（毫秒），默认 30000。
+            testRetryCount: 单个测试失败重试次数，默认 2；显式传 0 合法生效。
+        """
         self.session_ready = False
         self.browser = None
         self.page = None
@@ -127,6 +156,7 @@ class ExploratoryAgent:
         self.console_monitor = None
         self.network_monitor = None
         self.config = dict(config)
+        # 身份默认值：不传时自动生成，产物落在 runs/<sessionId>/<runId>/ 下。
         self.config.setdefault("runId", new_run_id())
         self.config.setdefault("artifactDir", str(get_runtime().run_dir(self.config.get("sessionId") or "anonymous", self.config["runId"])))
         self.config.setdefault("testOutputDir", str(get_runtime().run_dir(self.config.get("sessionId") or "anonymous", self.config["runId"]) / "generated-tests"))
@@ -138,6 +168,8 @@ class ExploratoryAgent:
         self.auth_manager = AuthenticationManager(database, {"storageType": "sqlite"})
         self.state = {"visitedUrls": OrderedSet(), "findings": [], "steps": 0,
                       "history": [], "todoQueue": []}
+        # test* 配置项属于 TestGenerator/TestExecutor 子系统，这里只做装配转发；
+        # enableTestGeneration 同时门控两者，纯探索运行不触测试生成。
         self.test_generator = None
         self.test_executor = None
         if config.get("enableTestGeneration"):
@@ -148,11 +180,13 @@ class ExploratoryAgent:
                 "parallel": config.get("testParallelExecution") or False,
                 "maxConcurrency": config.get("testMaxConcurrency") or 4,
                 "timeout": config.get("testTimeout") or 30000,
+                # 用 get(默认值) 而非 `or`：显式传 0 次重试会生效保留；其余键
+                # 经 `or` 读取，传 0 会被吞掉并落到默认值。
                 "retryCount": config.get("testRetryCount", 2)}
             self.test_executor = TestExecutor(execution_config)
 
     async def start(self):
-        logger.log("正在启动探索测试代理……")
+        logger.log("正在启动 Web Audit Agent……")
         if self.config.get("sessionId"):
             loaded_state = self.session_repo.load_state(self.config["sessionId"])
             if loaded_state:
@@ -179,7 +213,10 @@ class ExploratoryAgent:
         if not self.config.get("auth") and saved_config.get("authAppIdentifier"):
             self.config["auth"] = {"required": True, "appIdentifier": saved_config["authAppIdentifier"]}
         self.state["baseUrl"] = self.state.get("baseUrl") or self.config["baseUrl"]
-        # Persist references and non-secret options only; never credentials or model objects.
+        # 只落库引用与非敏感选项；model 对象与凭据绝不写入状态。
+        # maxSteps/maxFailures 仅为会话快照：本次运行的真实预算来自
+        # explore() 的参数（见 runner.py），与这两个键无关。
+        # authAppIdentifier 是恢复会话复用已存凭据的依据。
         self.state["runId"] = self.config["runId"]
         self.state["artifactDir"] = self.config["artifactDir"]
         self.state["runConfig"] = {key: self.config.get(key) for key in (
@@ -252,11 +289,11 @@ class ExploratoryAgent:
                 self.playwright = None
         if errors:
             raise RuntimeError("清理浏览器失败：" + "；".join(errors))
-        logger.log("探索测试代理已停止")
+        logger.log("Web Audit Agent 已停止")
 
     async def step(self, guidance=None):
         if not self.page:
-            raise RuntimeError("测试代理尚未启动")
+            raise RuntimeError("Web Audit Agent 尚未启动")
         self.state["steps"] += 1
         url = self.page.url
         self.state["visitedUrls"].add(url)
@@ -346,7 +383,7 @@ class ExploratoryAgent:
             return {"action": "error", "reason": "模型返回的 JSON 无效", "completed": False}
         if not isinstance(parsed, dict) or not isinstance(parsed.get("action"), str) or not isinstance(parsed.get("reason"), str):
             return {"action": "error", "reason": "模型响应缺少有效 action/reason", "completed": False, "success": False}
-        logger.log(f"代理决策：{parsed.get('reason')}")
+        logger.log(f"Agent 决策：{parsed.get('reason')}")
         logger.log(f"执行操作：{parsed.get('action')}")
         action_result = await self.execute_action(parsed["action"], parsed.get("params"))
         self.state["history"].append({"action": parsed["action"], "reason": parsed["reason"],
@@ -364,7 +401,7 @@ class ExploratoryAgent:
 
     async def _execute_action(self, action, params):
         if not self.page:
-            return {"success": False, "result": "测试代理尚未启动"}
+            return {"success": False, "result": "Web Audit Agent 尚未启动"}
         try:
             if action == "add_to_queue":
                 new_urls = params if isinstance(params, list) else [params] if isinstance(params, str) else (params or {}).get("urls", [])
