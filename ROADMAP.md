@@ -163,5 +163,4 @@
 | 2026-09-30 | 优先级调整（用户指定）：#3 CLI 专业化提为最高（P2 → P0），执行顺序改为 3 → 5 → 2 → 4（#1 已完成） |
 | 2026-09-30 | #3 CLI 专业化实现完成：typer 子命令 run/report/test/mcp + 向导重写（rich 渲染、共用 runner）+ 退出码契约 0/1/2/130 + --json 输出 + hatchling 打包（uv build 可装）。src/cli/run_tests.py 由 test 子命令替代；wrap_text 遮蔽内建问题随旧向导消解。ruff 通过，全量 103 项测试通过 |
 | 2026-10-02 | #3 异常路径与恢复契约补齐：保存失败传播、完整启动/清理生命周期、连续失败阈值、动作结果历史、结构化 JSON 结果、恢复目标及认证校验；新增失败边界与本地 Chromium CLI 集成验证；最终全量 152 项测试、Ruff 与 diff 检查通过。 |
-
 | 2026-10-03 | #3 增加统一配置与数据目录、config/paths/clean/uninstall、运行产物索引与报告附件导出；开发数据不迁移；最终全量 181 项测试、Ruff 和 diff 检查通过，wheel 在项目外通过本地模型及 Chromium 验证。详细规则见 docs/cli-storage.md。 |

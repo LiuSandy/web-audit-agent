@@ -29,7 +29,7 @@ Pytest discovers `tests/**/*.test.py` and `*_spec.py`; test functions use `test_
 
 ## Commit & Pull Request Guidelines
 
-This checkout has no Git history, so no existing commit-message convention can be verified. Use short, imperative subjects that describe the change. In pull requests, explain the behavior changed, list verification commands and results, link any relevant issue, and include screenshots when browser-visible behavior or report output changes.
+This checkout has no Git history, so no existing commit-message convention can be verified. Use short, imperative subjects that describe the change. Do not add AI attribution trailers (such as `Co-Authored-By: Claude ...`) to commit messages. In pull requests, explain the behavior changed, list verification commands and results, link any relevant issue, and include screenshots when browser-visible behavior or report output changes.
 
 ## Security & Configuration
 
