@@ -1,0 +1,417 @@
+<title>run 命令执行流程</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700;900&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<!--
+  设计计划
+  与 docs/architecture.html 同一视觉语言（同 token / 字体），便于两页对照阅读
+  色彩：冷调纸灰底 + 石板墨色 + 松绿强调色（强调色只用于"出报告"与"自动扫描"两个关键点）
+  布局：图 1 纵向主时间线（启动）→ 图 2 单步循环（函数级）→ 图 3 终止收尾，图后附文件·函数清单表
+-->
+<style>
+:root {
+  --bg: #F4F5F1;
+  --surface: #FFFFFF;
+  --ink: #242B2E;
+  --muted: #66736F;
+  --line: #D8DDD4;
+  --flow: #8A968F;
+  --code-bg: #EBEEE8;
+  --accent: #116655;
+  --accent-soft: #E2EFE9;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15191B;
+    --surface: #1D2325;
+    --ink: #E7ECEA;
+    --muted: #8FA09D;
+    --line: #2E3739;
+    --flow: #677877;
+    --code-bg: #232B2D;
+    --accent: #4CC2A6;
+    --accent-soft: #20342F;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15191B;
+  --surface: #1D2325;
+  --ink: #E7ECEA;
+  --muted: #8FA09D;
+  --line: #2E3739;
+  --flow: #677877;
+  --code-bg: #232B2D;
+  --accent: #4CC2A6;
+  --accent-soft: #20342F;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.75;
+  margin: 0;
+  padding: 40px 24px 64px;
+}
+.wrap { max-width: 980px; margin: 0 auto; }
+.eyebrow {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+h1 {
+  font-family: "Noto Serif SC", serif;
+  font-weight: 900;
+  font-size: 30px;
+  line-height: 1.3;
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+.lede { color: var(--muted); font-size: 15px; max-width: 44em; margin: 0 0 8px; }
+.lede code, p code, td code, li code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  background: var(--code-bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 52px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+h2::before {
+  content: "";
+  width: 18px;
+  height: 3px;
+  background: var(--accent);
+  flex: none;
+}
+figure { margin: 18px 0 8px; }
+.fig-scroll { overflow-x: auto; }
+.fig-scroll svg { display: block; width: 100%; min-width: 720px; height: auto; max-width: 100%; }
+figcaption { font-size: 12px; color: var(--muted); margin-top: 10px; }
+figcaption b { color: var(--ink); font-weight: 700; }
+.tbl-scroll { overflow-x: auto; margin: 14px 0 0; }
+table.trace {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 720px;
+  font-size: 13px;
+}
+table.trace th {
+  text-align: left;
+  font-weight: 700;
+  background: var(--code-bg);
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  white-space: nowrap;
+}
+table.trace td {
+  padding: 7px 12px;
+  border: 1px solid var(--line);
+  vertical-align: top;
+}
+table.trace td:first-child { white-space: nowrap; font-family: "JetBrains Mono", monospace; font-size: 12px; }
+table.trace td:nth-child(2) { white-space: nowrap; font-family: "JetBrains Mono", monospace; font-size: 12px; }
+.skip { margin: 14px 0 0; padding: 0; list-style: none; }
+.skip li { padding-left: 18px; position: relative; margin-bottom: 8px; }
+.skip li::before { content: ""; position: absolute; left: 2px; top: 11px; width: 6px; height: 6px; border-radius: 50%; background: var(--flow); }
+footer {
+  margin-top: 56px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+/* SVG 文本 */
+svg text { font-family: "Noto Sans SC", sans-serif; }
+svg .bt { font-size: 13px; font-weight: 600; fill: var(--ink); }
+svg .bm { font-family: "JetBrains Mono", monospace; font-size: 12.5px; font-weight: 600; fill: var(--ink); }
+svg .bp { font-family: "JetBrains Mono", monospace; font-size: 9.5px; fill: var(--muted); }
+svg .nt { font-size: 12.5px; font-weight: 600; fill: var(--ink); }
+svg .ns { font-size: 10px; fill: var(--muted); }
+svg .nc { font-family: "JetBrains Mono", monospace; font-size: 9.5px; fill: var(--muted); }
+svg .al { font-size: 10px; fill: var(--muted); }
+svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+svg .node { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
+svg .acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+svg .pill { fill: var(--accent-soft); }
+svg .pt { font-size: 11px; font-weight: 700; fill: var(--accent); }
+svg .flow { stroke: var(--flow); stroke-width: 1.4; fill: none; }
+svg .flowa { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">WEBAUDIT-AGENT · 学习笔记 · 与 architecture.html 配套</p>
+  <h1>webaudit run 的完整执行链</h1>
+  <p class="lede">第一次执行 <code>webaudit run &lt;url&gt;</code>（不恢复旧会话、不登录、不生成测试）时，每一步发生在哪个文件、哪个类、哪个函数。图 1 看启动，图 2 看单步循环，图 3 看终止收尾，表格是全部文件的速查清单。</p>
+
+  <h2>阶段一：命令、配置与浏览器启动</h2>
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 960 1030" role="img" aria-label="从 CLI 入口到浏览器就绪的纵向时间线：命令层、配置装配层、启动准备层共 11 个函数，首次执行在 load_state 处走全新会话分支">
+      <defs>
+        <marker id="r1w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" style="fill:var(--flow)"/>
+        </marker>
+      </defs>
+
+      <rect class="pill" x="20" y="18" width="128" height="24" rx="12"/>
+      <text class="pt" x="42" y="34">阶段 A · 命令层</text>
+
+      <rect class="node" x="20" y="58" width="920" height="60" rx="6"/>
+      <text class="bm" x="36" y="79">main()</text>
+      <text class="bp" x="924" y="79" text-anchor="end">src/index.py</text>
+      <text class="ns" x="36" y="103">CLI 进程入口：转发到 typer 应用</text>
+      <path class="flow" d="M480,118 V136" marker-end="url(#r1w)"/>
+
+      <rect class="node" x="20" y="140" width="920" height="60" rx="6"/>
+      <text class="bm" x="36" y="161">app.command("run") → run_command()</text>
+      <text class="bp" x="924" y="161" text-anchor="end">src/cli/app.py:33 · src/cli/commands/run.py:95</text>
+      <text class="ns" x="36" y="185">解析 --home / --data-dir 初始化运行时根目录；选项缺省时预算回落 config.toml 的 run 节（默认 50 / 3）</text>
+      <path class="flow" d="M480,200 V218" marker-end="url(#r1w)"/>
+
+      <rect class="node" x="20" y="222" width="920" height="60" rx="6"/>
+      <text class="bm" x="36" y="243">validate_options()</text>
+      <text class="bp" x="924" y="243" text-anchor="end">src/cli/core/config.py:84</text>
+      <text class="ns" x="36" y="267">URL、预算、凭据组合校验；不通过则立即退出 USAGE(2)，不触浏览器</text>
+      <path class="flow" d="M480,282 V300" marker-end="url(#r1w)"/>
+
+      <rect class="pill" x="20" y="304" width="158" height="24" rx="12"/>
+      <text class="pt" x="42" y="320">阶段 B · 配置与装配</text>
+
+      <rect class="node" x="20" y="344" width="920" height="60" rx="6"/>
+      <text class="bm" x="36" y="365">build_config()</text>
+      <text class="bp" x="924" y="365" text-anchor="end">src/cli/core/config.py:46</text>
+      <text class="ns" x="36" y="389">new_session_id() + new_run_id() + run_dir() 建产物目录 → 组装 camelCase 配置 dict</text>
+      <path class="flow" d="M480,404 V422" marker-end="url(#r1w)"/>
+
+      <rect class="node" x="20" y="426" width="920" height="60" rx="6"/>
+      <text class="bm" x="36" y="447">get_runtime()</text>
+      <text class="bp" x="924" y="447" text-anchor="end">src/runtime</text>
+      <text class="ns" x="36" y="471">读 config.toml（llm / run / storage 三节）与 API 密钥；runs/ 目录约定的唯一来源</text>
+      <path class="flow" d="M480,486 V504" marker-end="url(#r1w)"/>
+
+      <rect class="node" x="20" y="508" width="920" height="60" rx="6"/>
+      <text class="bm" x="36" y="529">ExploratoryAgent(config) → __init__()</text>
+      <text class="bp" x="924" y="529" text-anchor="end">src/agents/exploratory.py:121 · src/services/llm.py:67</text>
+      <text class="ns" x="36" y="553">补默认值 → get_default_model() 建 ChatModel → AppDatabase 打开 SQLite → SessionRepository</text>
+      <path class="flow" d="M480,568 V586" marker-end="url(#r1w)"/>
+
+      <rect class="node" x="20" y="590" width="920" height="60" rx="6"/>
+      <text class="bm" x="36" y="611">explore() — 生命周期启动</text>
+      <text class="bp" x="924" y="611" text-anchor="end">src/cli/core/runner.py:21</text>
+      <text class="ns" x="36" y="635">初始化 run_summary（终止原因起步为 failed）→ 调 agent.start()；步数 / 失败预算从这里开始生效</text>
+      <path class="flow" d="M480,650 V668" marker-end="url(#r1w)"/>
+
+      <rect class="pill" x="20" y="672" width="210" height="24" rx="12"/>
+      <text class="pt" x="42" y="688">阶段 C · 浏览器启动与预爬</text>
+
+      <rect class="node" x="20" y="712" width="920" height="60" rx="6"/>
+      <text class="bm" x="36" y="733">load_state(sessionId)</text>
+      <text class="bp" x="924" y="733" text-anchor="end">src/repositories/session_repository.py</text>
+      <text class="ns" x="36" y="757">首次执行：查无状态 → 走全新会话分支（steps = 0，跳过同源校验与断点续爬）</text>
+      <path class="flow" d="M480,772 V790" marker-end="url(#r1w)"/>
+
+      <rect class="node" x="20" y="794" width="920" height="60" rx="6"/>
+      <text class="bm" x="36" y="815">start() — 浏览器装配</text>
+      <text class="bp" x="924" y="815" text-anchor="end">src/agents/exploratory.py:188</text>
+      <text class="ns" x="36" y="839">chromium.launch(headless) → new_page() → ConsoleMonitor / NetworkMonitor 挂页面事件（读后即清缓冲）</text>
+      <path class="flow" d="M480,854 V872" marker-end="url(#r1w)"/>
+
+      <rect class="node" x="20" y="876" width="920" height="60" rx="6"/>
+      <text class="bm" x="36" y="897">crawl_site(page, baseUrl)</text>
+      <text class="bp" x="924" y="897" text-anchor="end">src/tools/crawler.py:15</text>
+      <text class="ns" x="36" y="921">同域 BFS 预爬 ≤ 20 页 → 全部塞进 todoQueue；goto(baseUrl) 着陆首页 → 交给步循环（图 2）</text>
+    </svg>
+    </div>
+    <figcaption><b>图 1</b> · 命令到浏览器就绪共经过 3 层 11 个函数。本次未传 <code style="font-family:'JetBrains Mono',monospace;font-size:11px">--auth-*</code>，登录链（AuthenticationManager）整段跳过。</figcaption>
+  </figure>
+
+  <h2>阶段二：单步循环（函数级）</h2>
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 960 340" role="img" aria-label="一次 step 的函数级数据流：step 到 _step 组提示词，一次 LLM 调用产出一个 JSON 决策，execute_action 执行后 finally 自动扫描，history 追加并落库，explore 预算判定后进入下一步">
+      <defs>
+        <marker id="r2w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" style="fill:var(--flow)"/>
+        </marker>
+      </defs>
+
+      <rect class="node" x="20" y="50" width="146" height="76" rx="6"/>
+      <text class="nt" x="32" y="72">step()</text>
+      <text class="bp" x="32" y="88">exploratory.py:294</text>
+      <text class="ns" x="32" y="104">steps+1 · url→visitedUrls</text>
+      <text class="ns" x="32" y="118">异常 → error 步</text>
+
+      <rect class="node" x="196" y="50" width="146" height="76" rx="6"/>
+      <text class="nt" x="208" y="72">_step()</text>
+      <text class="bp" x="208" y="88">exploratory.py:316</text>
+      <text class="ns" x="208" y="104">title + 快照(JS) · 最近 3 步</text>
+      <text class="ns" x="208" y="118">防循环 / 停滞 / 空队列注入</text>
+
+      <rect class="node" x="372" y="50" width="146" height="76" rx="6"/>
+      <text class="nt" x="384" y="72">model.ainvoke</text>
+      <text class="bp" x="384" y="88">llm.py 的 ChatModel</text>
+      <text class="ns" x="384" y="104">SystemMessage + HumanMessage</text>
+      <text class="ns" x="384" y="118">30s 超时 · 429 退避 ×3</text>
+
+      <rect class="node" x="548" y="50" width="146" height="76" rx="6"/>
+      <text class="nt" x="560" y="72">解析决策</text>
+      <text class="bp" x="560" y="88">exploratory.py:377</text>
+      <text class="ns" x="560" y="104">去 ``` 围栏 → json.loads</text>
+      <text class="ns" x="560" y="118">校验 action / reason</text>
+
+      <rect class="node" x="724" y="50" width="146" height="76" rx="6"/>
+      <text class="nt" x="736" y="72">execute_action</text>
+      <text class="bp" x="736" y="88">exploratory.py:402</text>
+      <text class="ns" x="736" y="104">7 种动作 · 未知→失败</text>
+      <text class="ns" x="736" y="118">每步只执行一个动作</text>
+
+      <path class="flow" d="M166,88 H192" marker-end="url(#r2w)"/>
+      <path class="flow" d="M342,88 H368" marker-end="url(#r2w)"/>
+      <path class="flow" d="M518,88 H544" marker-end="url(#r2w)"/>
+      <path class="flow" d="M694,88 H720" marker-end="url(#r2w)"/>
+      <text class="al" x="468" y="154" text-anchor="middle">每个 result yield 给 run.py:34 → render_step() 渲染一行终端进度</text>
+
+      <rect class="acc" x="20" y="206" width="240" height="76" rx="6"/>
+      <text class="nt" x="34" y="228" style="fill:var(--accent)">自动扫描（finally）</text>
+      <text class="bp" x="34" y="244">exploratory.py:475</text>
+      <text class="ns" x="34" y="260">仅 navigate / click / fill_form 后触发</text>
+      <text class="ns" x="34" y="274">监视器读后即清 + 校验扫描</text>
+
+      <rect class="node" x="290" y="206" width="210" height="76" rx="6"/>
+      <text class="nt" x="304" y="228">record_unique_finding</text>
+      <text class="bp" x="304" y="244">exploratory.py:517</text>
+      <text class="ns" x="304" y="260">type + description + selector</text>
+      <text class="ns" x="304" y="274">三元组去重，occurrences 合并</text>
+
+      <rect class="node" x="530" y="206" width="210" height="76" rx="6"/>
+      <text class="nt" x="544" y="228">history 追加 + save_state()</text>
+      <text class="bp" x="544" y="244">session_repository.py</text>
+      <text class="ns" x="544" y="260">动作 / 原因 / URL / 结果入 history</text>
+      <text class="ns" x="544" y="274">每步覆盖写 SQLite</text>
+
+      <rect class="node" x="770" y="206" width="170" height="76" rx="6"/>
+      <text class="nt" x="784" y="228">explore() 预算判定</text>
+      <text class="bp" x="784" y="244">runner.py:46-54</text>
+      <text class="ns" x="784" y="260">失败≥3 / completed / 步数耗尽</text>
+      <text class="ns" x="784" y="274">任一命中 → 终止（图 3）</text>
+
+      <path class="flow" d="M797,126 V166 H140 V202" marker-end="url(#r2w)"/>
+      <text class="al" x="240" y="162">动作执行完，finally 触发扫描</text>
+      <path class="flow" d="M260,244 H286" marker-end="url(#r2w)"/>
+      <path class="flow" d="M500,244 H526" marker-end="url(#r2w)"/>
+      <path class="flow" d="M740,244 H766" marker-end="url(#r2w)"/>
+      <path class="flow" d="M855,282 V318 H95 V130" marker-end="url(#r2w)"/>
+      <text class="al" x="350" y="312">不触发终止 → 下一轮 step()（上一步结果已在 history 里）</text>
+    </svg>
+    </div>
+    <figcaption><b>图 2</b> · 一步 = 组提示词 → 一次 LLM 调用 → 一个动作 → finally 扫描 → 落库。循环的生死不由模型决定：预算判定在 explore() 的代码里。</figcaption>
+  </figure>
+
+  <h2>阶段三：终止与收尾</h2>
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 960 470" role="img" aria-label="四种终止原因殊途同归：先在 explore 的 finally 里关浏览器并落库，再经 finish_session 生成报告（失败与中断也出报告），最后按终止原因结算退出码">
+      <defs>
+        <marker id="r3w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" style="fill:var(--flow)"/>
+        </marker>
+      </defs>
+
+      <rect class="node" x="20" y="30" width="215" height="52" rx="6"/>
+      <text class="nt" x="127" y="50" text-anchor="middle">finish 且成功</text>
+      <text class="ns" x="127" y="70" text-anchor="middle">→ completed（runner.py:48）</text>
+
+      <rect class="node" x="252" y="30" width="215" height="52" rx="6"/>
+      <text class="nt" x="359" y="50" text-anchor="middle">步数耗尽</text>
+      <text class="ns" x="359" y="70" text-anchor="middle">→ step_limit（runner.py:51）</text>
+
+      <rect class="node" x="484" y="30" width="215" height="52" rx="6"/>
+      <text class="nt" x="591" y="50" text-anchor="middle">连续失败 ≥ 3</text>
+      <text class="ns" x="591" y="70" text-anchor="middle">→ ExplorationFailed（runner.py:46）</text>
+
+      <rect class="node" x="716" y="30" width="215" height="52" rx="6"/>
+      <text class="nt" x="823" y="50" text-anchor="middle">Ctrl+C / 取消</text>
+      <text class="ns" x="823" y="70" text-anchor="middle">→ CancelledError（run.py:36）</text>
+
+      <path class="flow" d="M127,82 V118" marker-end="url(#r3w)"/>
+      <path class="flow" d="M359,82 V118" marker-end="url(#r3w)"/>
+      <path class="flow" d="M591,82 V118" marker-end="url(#r3w)"/>
+      <path class="flow" d="M823,82 V118" marker-end="url(#r3w)"/>
+
+      <rect class="node" x="20" y="124" width="920" height="88" rx="6"/>
+      <text class="bm" x="36" y="150">explore() finally — 清理</text>
+      <text class="bp" x="924" y="150" text-anchor="end">src/cli/core/runner.py:75</text>
+      <text class="ns" x="36" y="174">agent.stop() 关闭浏览器（清理错误收进 cleanupErrors） · lastRun 写回 state</text>
+      <text class="ns" x="36" y="192">save_state() 最终落库（部分结果从这一刻起可恢复）</text>
+      <path class="flow" d="M480,212 V240" marker-end="url(#r3w)"/>
+
+      <rect class="acc" x="20" y="246" width="920" height="104" rx="6"/>
+      <text class="bm" x="36" y="272" style="fill:var(--accent)">finish_session() — 无论成败都执行（USAGE 拒绝除外）</text>
+      <text class="bp" x="924" y="272" text-anchor="end">src/cli/core/runner.py:99</text>
+      <text class="ns" x="36" y="296">① generate_report() → runs/&lt;sessionId&gt;/&lt;runId&gt;/report.md（src/utils/report.py:17）</text>
+      <text class="ns" x="36" y="314">② --generate-tests 且成功时：agent.generate_tests()（TestGenerator → TestExecutor，本次未触发）</text>
+      <text class="ns" x="36" y="332">③ save_run() → agent_runs 表索引 · exportDir 有值则 copytree 导出（本次未触发）</text>
+      <path class="flow" d="M480,350 V378" marker-end="url(#r3w)"/>
+
+      <rect class="node" x="20" y="384" width="920" height="68" rx="6"/>
+      <text class="bm" x="36" y="410">输出与退出码</text>
+      <text class="bp" x="924" y="410" text-anchor="end">src/cli/commands/run.py:70-92 · src/cli/core/exits.py</text>
+      <text class="ns" x="36" y="434">--json：payload 单行 JSON → stdout · 成功：报告路径 + 发现表格 · 失败：friendly_hint 错误信息</text>
+      <text class="ns" x="36" y="448">退出码：0 OK · 1 RUN_FAILED · 2 USAGE · 130 INTERRUPTED</text>
+    </svg>
+    </div>
+    <figcaption><b>图 3</b> · 四种终止殊途同归：先关浏览器再出报告，<b>失败与中断也会生成 report.md</b>（部分结果永远留档），最后统一结算退出码。</figcaption>
+  </figure>
+
+  <h2>文件 · 类 · 函数速查清单</h2>
+  <div class="tbl-scroll">
+  <table class="trace">
+    <thead><tr><th>文件</th><th>类 / 函数</th><th>干什么</th></tr></thead>
+    <tbody>
+      <tr><td>src/index.py</td><td>main()</td><td>CLI 进程入口，转发到 typer 应用</td></tr>
+      <tr><td>src/cli/app.py</td><td>app / main_callback()</td><td>注册全部子命令；解析 --home / --data-dir 等全局选项，初始化 runtime</td></tr>
+      <tr><td>src/cli/commands/run.py</td><td>run_command() · _execute()</td><td>选项与预算解析、编排整个执行、最终按退出码收口</td></tr>
+      <tr><td>src/cli/core/config.py</td><td>RunOptions · validate_options() · build_config()</td><td>运行选项载体；参数校验；生成 sessionId / runId / 产物目录与 camelCase 配置 dict</td></tr>
+      <tr><td>src/runtime</td><td>get_runtime() · run_dir()</td><td>config.toml、密钥、runs/ 目录约定的单一来源</td></tr>
+      <tr><td>src/cli/core/runner.py</td><td>explore() · finish_session()</td><td>步循环与预算、终止原因；报告生成、测试生成入口与导出</td></tr>
+      <tr><td>src/agents/exploratory.py</td><td>ExploratoryAgent</td><td>决策循环本体：start / step / _step / execute_action / perform_automatic_bug_scanning / record_unique_finding / save_state / stop</td></tr>
+      <tr><td>src/services/llm.py</td><td>get_default_model()</td><td>按配置创建 Gemini 或 OpenAI 兼容的 LangChain ChatModel</td></tr>
+      <tr><td>src/database/database.py</td><td>AppDatabase</td><td>SQLite 连接单例（agent_sessions / agent_runs / credentials / browser_sessions）</td></tr>
+      <tr><td>src/repositories/session_repository.py</td><td>SessionRepository</td><td>load_state / save_state / save_run 的读写封装</td></tr>
+      <tr><td>src/auth/auth_manager.py</td><td>AuthenticationManager</td><td>登录链。本次未传 --auth-*，整段跳过</td></tr>
+      <tr><td>src/tools/crawler.py</td><td>crawl_site()</td><td>同域 BFS 预爬（≤ 20 页），构建 todoQueue</td></tr>
+      <tr><td>src/tools/console_errors.py · network_errors.py</td><td>ConsoleMonitor · NetworkMonitor</td><td>页面事件缓冲（console / pageerror / response / requestfailed），get_errors() 读后即清</td></tr>
+      <tr><td>src/tools/broken_images.py · validation_errors.py</td><td>find_broken_images() · 校验扫描</td><td>动作内与扫描期的问题采集器</td></tr>
+      <tr><td>src/utils/report.py</td><td>generate_report()</td><td>汇总 findings / visitedUrls / run_summary → 生成 report.md</td></tr>
+      <tr><td>src/cli/core/console.py</td><td>render_step() · findings_table()</td><td>每步一行进度渲染；终局发现按严重度着色的表格</td></tr>
+      <tr><td>src/services/test_generator.py · test_executor.py</td><td>TestGenerator · TestExecutor</td><td>测试生成与执行子系统。本次未触发（默认不开 --generate-tests）</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>本次执行不触发的分支</h2>
+  <ul class="skip">
+    <li><code>SessionTargetError</code> 同源校验：没有历史状态可比对，直接放行。</li>
+    <li><code>auth_manager.authenticate()</code> 登录链：未传认证参数。</li>
+    <li>恢复分支的 <code>goto(last_url)</code>：走的是「预爬建队列」分支。</li>
+    <li><code>TestGenerator / TestExecutor</code>：__init__ 里 enableTestGeneration 为假，两者从未实例化。</li>
+    <li><code>exportDir</code> 导出：未传 --output-dir。</li>
+  </ul>
+
+  <footer>基于提交 d872747 之后的代码核对（行号以当前工作树为准）；系统级架构见 architecture.html，已知问题清单见 docs/issues/2026-10-08-logic-audit.md（本地）。</footer>
+</div>

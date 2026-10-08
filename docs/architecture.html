@@ -1,0 +1,409 @@
+<title>WebAudit 架构总览</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700;900&family=Noto+Sans+SC:wght@400;500;700&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<!--
+  设计计划
+  色彩：冷调纸灰底 + 石板墨色 + 松绿强调色（强调色只用于"自动扫描旁路"这条最易被忽略的机制路径）
+  字体：Noto Serif SC（标题）/ Noto Sans SC（正文与图中标签）/ JetBrains Mono（模块路径、代码）
+  布局：单栏文档，三张图自上而下——系统总览 → 单步内部 → 单页模式对照，图宽 960 等比缩放
+-->
+<style>
+:root {
+  --bg: #F4F5F1;
+  --surface: #FFFFFF;
+  --ink: #242B2E;
+  --muted: #66736F;
+  --line: #D8DDD4;
+  --flow: #8A968F;
+  --code-bg: #EBEEE8;
+  --accent: #116655;
+  --accent-soft: #E2EFE9;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15191B;
+    --surface: #1D2325;
+    --ink: #E7ECEA;
+    --muted: #8FA09D;
+    --line: #2E3739;
+    --flow: #677877;
+    --code-bg: #232B2D;
+    --accent: #4CC2A6;
+    --accent-soft: #20342F;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15191B;
+  --surface: #1D2325;
+  --ink: #E7ECEA;
+  --muted: #8FA09D;
+  --line: #2E3739;
+  --flow: #677877;
+  --code-bg: #232B2D;
+  --accent: #4CC2A6;
+  --accent-soft: #20342F;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  font-size: 14px;
+  line-height: 1.75;
+  margin: 0;
+  padding: 40px 24px 64px;
+}
+.wrap { max-width: 980px; margin: 0 auto; }
+.eyebrow {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+h1 {
+  font-family: "Noto Serif SC", serif;
+  font-weight: 900;
+  font-size: 30px;
+  line-height: 1.3;
+  margin: 0 0 12px;
+  text-wrap: balance;
+}
+.lede { color: var(--muted); font-size: 15px; max-width: 42em; margin: 0 0 8px; }
+h2 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 52px 0 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+h2::before {
+  content: "";
+  width: 18px;
+  height: 3px;
+  background: var(--accent);
+  flex: none;
+}
+figure { margin: 18px 0 8px; }
+.fig-scroll { overflow-x: auto; }
+.fig-scroll svg { display: block; width: 100%; min-width: 720px; height: auto; max-width: 100%; }
+figcaption { font-size: 12px; color: var(--muted); margin-top: 10px; }
+figcaption b { color: var(--ink); font-weight: 700; }
+.notes { margin: 14px 0 0; padding: 0; list-style: none; }
+.notes li { padding-left: 18px; position: relative; margin-bottom: 10px; }
+.notes li::before { content: ""; position: absolute; left: 2px; top: 11px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+.notes code, .inline-code {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12px;
+  background: var(--code-bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+pre.storage {
+  font-family: "JetBrains Mono", monospace;
+  font-size: 12.5px;
+  line-height: 1.8;
+  background: var(--code-bg);
+  border-radius: 8px;
+  padding: 16px 20px;
+  overflow-x: auto;
+  margin: 14px 0 0;
+}
+pre.storage .c { color: var(--muted); }
+footer {
+  margin-top: 56px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+  color: var(--muted);
+}
+/* SVG 文本 */
+svg text { font-family: "Noto Sans SC", sans-serif; }
+svg .bt { font-size: 13px; font-weight: 600; fill: var(--ink); }
+svg .bm { font-family: "JetBrains Mono", monospace; font-size: 12.5px; font-weight: 600; fill: var(--ink); }
+svg .bp { font-family: "JetBrains Mono", monospace; font-size: 10px; fill: var(--muted); }
+svg .nt { font-size: 13px; font-weight: 600; fill: var(--ink); }
+svg .ns { font-size: 10px; fill: var(--muted); }
+svg .nc { font-family: "JetBrains Mono", monospace; font-size: 9.5px; fill: var(--muted); }
+svg .al { font-size: 10.5px; fill: var(--muted); }
+svg .ala { font-size: 10px; fill: var(--accent); font-weight: 600; }
+svg .at { fill: var(--accent); font-weight: 600; }
+svg .box { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+svg .panel { fill: var(--surface); stroke: var(--line); stroke-width: 1; }
+svg .node { fill: var(--bg); stroke: var(--line); stroke-width: 1; }
+svg .acc { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 1.5; }
+svg .flow { stroke: var(--flow); stroke-width: 1.4; fill: none; }
+svg .flowa { stroke: var(--accent); stroke-width: 1.6; fill: none; }
+svg .dash { stroke-dasharray: 6 4; }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">WEBAUDIT-AGENT · 基于 src/ 全量阅读 · d872747</p>
+  <h1>架构总览：从三个入口到一份报告</h1>
+  <p class="lede">三个入口收敛到同一个 <code class="inline-code">explore()</code> 生命周期；发现问题的主路径是监视器旁路而非 LLM 主动记录；每步状态落库支撑会话恢复。图 1 看系统，图 2 看单步，图 3 看单页模式的差异。</p>
+
+  <h2>系统总览</h2>
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 960 720" role="img" aria-label="三个入口收敛到 explore() 生命周期；ExploratoryAgent 步循环驱动 Playwright 浏览器，监视器经自动扫描旁路写入 findings，每步落库 SQLite 支撑恢复，结束后生成报告">
+      <defs>
+        <marker id="f1w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" style="fill:var(--flow)"/>
+        </marker>
+        <marker id="f1a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" style="fill:var(--accent)"/>
+        </marker>
+      </defs>
+
+      <!-- 入口层 -->
+      <rect class="box" x="20" y="36" width="180" height="52" rx="6"/>
+      <text class="nt" x="36" y="57">CLI run &lt;url&gt;</text>
+      <text class="bp" x="36" y="75">src/cli/commands/run.py</text>
+
+      <rect class="box" x="20" y="104" width="180" height="52" rx="6"/>
+      <text class="nt" x="36" y="125">交互向导</text>
+      <text class="bp" x="36" y="143">src/cli/wizard.py</text>
+
+      <rect class="box" x="20" y="172" width="180" height="52" rx="6"/>
+      <text class="nt" x="36" y="193">MCP 后台任务</text>
+      <text class="bp" x="36" y="211">src/mcp/tools/exploratory.py</text>
+
+      <text class="al" x="20" y="254">共用同一 runner 生命周期（退出码 · 报告 · 恢复契约一致）</text>
+
+      <!-- 生命周期 -->
+      <rect class="panel" x="300" y="56" width="200" height="184" rx="6"/>
+      <text class="bm" x="316" y="80">explore()</text>
+      <text class="bp" x="316" y="98">src/cli/core/runner.py</text>
+      <text class="ns" x="316" y="126" font-size="11">start() → step ×N → stop()</text>
+      <text class="ns" x="316" y="146">步数预算 maxSteps（默认 50）</text>
+      <text class="ns" x="316" y="166">连续失败阈值 maxFailures（3）</text>
+      <text class="ns" x="316" y="186">中断时保存部分结果</text>
+      <text class="ns" x="316" y="206">每步结果 yield 回入口渲染</text>
+
+      <path class="flow" d="M200,62 H294" marker-end="url(#f1w)"/>
+      <path class="flow" d="M200,130 H294" marker-end="url(#f1w)"/>
+      <path class="flow" d="M200,198 H294" marker-end="url(#f1w)"/>
+
+      <!-- 运行产物 -->
+      <rect class="box" x="620" y="70" width="320" height="110" rx="6"/>
+      <text class="bt" x="636" y="94">运行产物</text>
+      <text class="bp" x="700" y="94">runs/&lt;sessionId&gt;/&lt;runId&gt;/</text>
+      <text class="nc" x="636" y="116">report.md</text>
+      <text class="ns" x="716" y="116">Markdown 探索报告</text>
+      <text class="nc" x="636" y="134">screenshots/</text>
+      <text class="ns" x="716" y="134">问题与布局截图</text>
+      <text class="nc" x="636" y="152">generated-tests/</text>
+      <text class="ns" x="716" y="152">生成的 E2E 测试</text>
+      <text class="nc" x="636" y="170">test-execution-*.md</text>
+      <text class="ns" x="716" y="170">测试执行报告</text>
+
+      <path class="flow" d="M500,120 H616" marker-end="url(#f1w)"/>
+      <text class="al" x="506" y="108">结束后生成</text>
+
+      <!-- explore → agent -->
+      <path class="flow" d="M400,244 V294" marker-end="url(#f1w)"/>
+      <text class="al" x="412" y="274">start() 一次 · step() 每步</text>
+
+      <!-- Agent 面板 -->
+      <rect class="panel" x="20" y="300" width="580" height="300" rx="6"/>
+      <text class="bm" x="36" y="322">ExploratoryAgent</text>
+      <text class="bp" x="584" y="322" text-anchor="end">src/agents/exploratory.py</text>
+      <text class="bp" x="36" y="342">state：visitedUrls · todoQueue · findings · history · runConfig</text>
+
+      <rect class="node" x="44" y="360" width="130" height="56" rx="6"/>
+      <text class="nt" x="58" y="382">快照 + 历史</text>
+      <text class="ns" x="58" y="400">页面元素 JS 快照</text>
+
+      <rect class="node" x="204" y="360" width="150" height="56" rx="6"/>
+      <text class="nt" x="218" y="382">LLM 决策</text>
+      <text class="ns" x="218" y="400">Gemini / OpenAI · JSON</text>
+
+      <rect class="node" x="384" y="360" width="180" height="56" rx="6"/>
+      <text class="nt" x="398" y="382">execute_action</text>
+      <text class="ns" x="398" y="400">7 种动作 · 异常→失败结果</text>
+
+      <path class="flow" d="M174,388 H200" marker-end="url(#f1w)"/>
+      <path class="flow" d="M354,388 H380" marker-end="url(#f1w)"/>
+
+      <!-- 自动扫描旁路（强调色） -->
+      <rect class="acc" x="384" y="490" width="180" height="56" rx="6"/>
+      <text class="nt at" x="398" y="512">自动扫描（finally）</text>
+      <text class="ns" x="398" y="530">监视器读后即清 + 校验</text>
+
+      <rect class="node" x="64" y="490" width="260" height="56" rx="6"/>
+      <text class="nt" x="80" y="512">record_unique_finding</text>
+      <text class="nc" x="80" y="530">type+description+selector 去重</text>
+
+      <path class="flow" d="M474,416 V484" marker-end="url(#f1w)"/>
+      <text class="al" x="150" y="452">仅 navigate / click / fill_form 后触发</text>
+      <path class="flow" d="M384,518 H330" marker-end="url(#f1w)"/>
+      <text class="al" x="336" y="508">去重</text>
+
+      <text class="ns" x="44" y="580">每步循环：结果写入 history，save_state() 落库（细节见图 2）</text>
+
+      <!-- 浏览器 -->
+      <rect class="box" x="680" y="300" width="260" height="100" rx="6"/>
+      <text class="nt" x="696" y="324">Playwright Chromium</text>
+      <text class="ns" x="696" y="344">headless · 每会话一个实例</text>
+      <text class="ns" x="696" y="362">页面即探索现场</text>
+
+      <path class="flow" d="M600,350 H674" marker-end="url(#f1w)"/>
+      <text class="al" x="608" y="338">动作指令</text>
+
+      <!-- 监视器 -->
+      <rect class="box" x="680" y="430" width="260" height="90" rx="6"/>
+      <text class="nt" x="696" y="454">ConsoleMonitor · NetworkMonitor</text>
+      <text class="nc" x="696" y="474">console / pageerror 事件</text>
+      <text class="nc" x="696" y="490">response / requestfailed 事件</text>
+
+      <path class="flow" d="M810,400 V424" marker-end="url(#f1w)"/>
+      <text class="al" x="822" y="416">页面事件</text>
+
+      <path class="flowa" d="M680,490 H606" marker-end="url(#f1a)"/>
+      <text class="ala" x="610" y="478">读后即清</text>
+
+      <!-- SQLite -->
+      <rect class="box" x="20" y="640" width="340" height="56" rx="6"/>
+      <text class="nt" x="36" y="662">SQLite</text>
+      <text class="bp" x="92" y="662">data/webaudit.sqlite</text>
+      <text class="ns" x="36" y="682">agent_sessions · agent_runs · credentials · browser_sessions</text>
+
+      <path class="flow" d="M180,600 V634" marker-end="url(#f1w)"/>
+      <text class="al" x="192" y="622">save_state() 每步 · save_run() 报告索引</text>
+
+      <path class="flow dash" d="M360,668 H420 V606" marker-end="url(#f1w)"/>
+      <text class="al" x="432" y="644">load_state() 恢复会话（--session-id）</text>
+    </svg>
+    </div>
+    <figcaption><b>图 1</b> · 三个入口共用 explore() 生命周期；绿线是发现问题的主路径：页面事件缓冲进监视器，navigate/click/fill_form 之后由 finally 里的自动扫描「读后即清」，去重并入 findings。虚线是会话恢复的数据回流。</figcaption>
+  </figure>
+
+  <ul class="notes">
+    <li><strong>编排只写一份。</strong>三个入口不各自实现循环：都落到 <code>src/cli/core/runner.py</code> 的 <code>explore()</code>，退出码（0 成功 / 1 失败 / 2 用法 / 130 中断）、报告与恢复契约只维护一处。MCP 入口在这层之外多一张 <code>active_tests</code> 状态表，供 <code>get_test_status</code> 轮询、<code>stop_test</code> 置停。</li>
+    <li><strong>发现问题靠旁路，不靠 LLM 自觉。</strong>LLM 每步只产出「下一步做什么」的 JSON 决策，<code>record_finding</code> 只是补充；控制台/网络错误由页面事件缓冲，自动扫描统一消费。推论：最后一步若是 <code>record_finding</code> 或 <code>finish</code>，缓冲里的错误不会进报告（问题清单 #5）。</li>
+    <li><strong>每步落库是恢复的基础。</strong><code>save_state()</code> 每步执行一次；<code>--session-id</code> 重新进入时 <code>load_state()</code> 还原队列与历史，<code>start()</code> 校验目标站点一致后才复用已存认证。</li>
+  </ul>
+
+  <h2>一步的内部</h2>
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 960 240" role="img" aria-label="单步数据流：step 记录 URL，构建带防循环注入的提示词，LLM 返回 JSON 决策，执行动作，finally 自动扫描；结果写 history 并落库后进入下一步">
+      <defs>
+        <marker id="f2w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" style="fill:var(--flow)"/>
+        </marker>
+      </defs>
+
+      <rect class="node" x="20" y="50" width="150" height="64" rx="6"/>
+      <text class="nt" x="34" y="72">step() 开始</text>
+      <text class="nc" x="34" y="92">page.url → visitedUrls</text>
+
+      <rect class="node" x="200" y="50" width="170" height="64" rx="6"/>
+      <text class="nt" x="214" y="72">构建提示词</text>
+      <text class="ns" x="214" y="90">元素快照 · 最近 3 步</text>
+      <text class="ns" x="214" y="106">重复 / 停滞 / 空队列注入</text>
+
+      <rect class="node" x="400" y="50" width="160" height="64" rx="6"/>
+      <text class="nt" x="414" y="72">LLM 调用</text>
+      <text class="ns" x="414" y="92">30s 超时 · 429 退避 ×3</text>
+
+      <rect class="node" x="590" y="50" width="160" height="64" rx="6"/>
+      <text class="nt" x="604" y="72">动作执行</text>
+      <text class="ns" x="604" y="92">7 种动作 · 异常计失败</text>
+
+      <rect class="acc" x="780" y="50" width="160" height="64" rx="6"/>
+      <text class="nt at" x="794" y="72">自动扫描（finally）</text>
+      <text class="ns" x="794" y="92">读后即清 → 去重入 findings</text>
+
+      <path class="flow" d="M170,82 H196" marker-end="url(#f2w)"/>
+      <path class="flow" d="M370,82 H396" marker-end="url(#f2w)"/>
+      <path class="flow" d="M560,82 H586" marker-end="url(#f2w)"/>
+      <path class="flow" d="M750,82 H776" marker-end="url(#f2w)"/>
+
+      <path class="flow" d="M670,114 V150 H936" marker-end="url(#f2w)"/>
+      <text class="al" x="700" y="142">finish 且成功 → completed 退出</text>
+
+      <path class="flow dash" d="M480,114 V165 H110 V118" marker-end="url(#f2w)"/>
+      <text class="al" x="160" y="158">解析失败 / 动作异常 → error 步，计入连续失败预算</text>
+
+      <path class="flow" d="M860,114 V210 H40 V118" marker-end="url(#f2w)"/>
+      <text class="al" x="250" y="202">history 追加（动作后 URL）→ save_state() 每步落库 → 下一轮 step()</text>
+    </svg>
+    </div>
+    <figcaption><b>图 2</b> · 一步的完整数据流。防循环注入（连续三次相同动作、同页超 10 步无发现、队列已空）直接改写系统提示词，这是探索不「绕圈」的主要手段。</figcaption>
+  </figure>
+
+  <h2>单页模式对照</h2>
+  <figure>
+    <div class="fig-scroll">
+    <svg viewBox="0 0 960 200" role="img" aria-label="单页测试是固定管线：发现元素、LLM 规划用例、逐条执行、布局审计、视觉回归、报告存档，无步循环也无会话恢复">
+      <defs>
+        <marker id="f3w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,0 L10,5 L0,10 z" style="fill:var(--flow)"/>
+        </marker>
+      </defs>
+
+      <rect class="node" x="30" y="40" width="134" height="48" rx="6"/>
+      <text class="nt" x="97" y="59" text-anchor="middle">发现元素</text>
+      <text class="ns" x="97" y="76" text-anchor="middle">JS 遍历可交互元素</text>
+
+      <rect class="node" x="184" y="40" width="134" height="48" rx="6"/>
+      <text class="nt" x="251" y="59" text-anchor="middle">规划用例</text>
+      <text class="ns" x="251" y="76" text-anchor="middle">LLM · ≤ maxTestCases</text>
+
+      <rect class="node" x="338" y="40" width="134" height="48" rx="6"/>
+      <text class="nt" x="405" y="59" text-anchor="middle">执行用例</text>
+      <text class="ns" x="405" y="76" text-anchor="middle">每条先重访目标页</text>
+
+      <rect class="node" x="492" y="40" width="134" height="48" rx="6"/>
+      <text class="nt" x="559" y="59" text-anchor="middle">布局审计</text>
+      <text class="ns" x="559" y="76" text-anchor="middle">DOM 启发式检查</text>
+
+      <rect class="node" x="646" y="40" width="134" height="48" rx="6"/>
+      <text class="nt" x="713" y="59" text-anchor="middle">视觉回归</text>
+      <text class="ns" x="713" y="76" text-anchor="middle">三视口基线对比</text>
+
+      <rect class="node" x="800" y="40" width="134" height="48" rx="6"/>
+      <text class="nt" x="867" y="59" text-anchor="middle">报告存档</text>
+      <text class="ns" x="867" y="76" text-anchor="middle">report.md + save_run</text>
+
+      <path class="flow" d="M164,64 H180" marker-end="url(#f3w)"/>
+      <path class="flow" d="M318,64 H334" marker-end="url(#f3w)"/>
+      <path class="flow" d="M472,64 H488" marker-end="url(#f3w)"/>
+      <path class="flow" d="M626,64 H642" marker-end="url(#f3w)"/>
+      <path class="flow" d="M780,64 H796" marker-end="url(#f3w)"/>
+
+      <text class="al" x="30" y="118">与探索模式的关键差异</text>
+      <rect x="30" y="130" width="140" height="32" rx="16" class="box"/>
+      <text class="ns" x="100" y="151" text-anchor="middle" font-size="11">无 LLM 步循环</text>
+      <rect x="190" y="130" width="120" height="32" rx="16" class="box"/>
+      <text class="ns" x="250" y="151" text-anchor="middle" font-size="11">无会话恢复</text>
+      <rect x="330" y="130" width="150" height="32" rx="16" class="box"/>
+      <text class="ns" x="405" y="151" text-anchor="middle" font-size="11">监视器按用例结算</text>
+      <rect x="500" y="130" width="170" height="32" rx="16" class="box"/>
+      <text class="ns" x="585" y="151" text-anchor="middle" font-size="11">规划失败有备用用例</text>
+
+      <text class="nc" x="30" y="192">独立启动浏览器，读取 PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH；探索 agent 当前未读取（问题清单 #7）</text>
+    </svg>
+    </div>
+    <figcaption><b>图 3</b> · 单页模式（<code style="font-family:'JetBrains Mono',monospace;font-size:11px">src/agents/single_page.py</code>）不走 explore() 生命周期：规划一次、执行一遍、无恢复语义，问题在用例结束时统一结算。</figcaption>
+  </figure>
+
+  <h2>运行时存储</h2>
+  <pre class="storage"><span class="c">~/.config/webaudit/</span>
+├── config.toml            <span class="c"># llm / run / storage 三节（provider · max_steps · data_dir）</span>
+├── credentials/           <span class="c"># .auth.key（凭据加密密钥）· api_keys.json · keyring.json</span>
+├── data/webaudit.sqlite   <span class="c"># agent_sessions · agent_runs · credentials · browser_sessions</span>
+└── runs/&lt;sessionId&gt;/&lt;runId&gt;/
+    ├── report.md          <span class="c"># 探索报告（generate_report 产出）</span>
+    ├── screenshots/       <span class="c"># bug / 布局 / 视觉回归截图</span>
+    └── generated-tests/   <span class="c"># 按问题类别生成的 pytest E2E 测试</span></pre>
+
+  <footer>基于提交 d872747 的 src/ 全量阅读绘制；已知问题与修复建议见 docs/issues/2026-10-08-logic-audit.md（本地目录，不入库）。</footer>
+</div>
