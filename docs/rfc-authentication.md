@@ -12,7 +12,7 @@
 
 ## 问题与目标
 
-没有认证支持时，代理只能访问公开页面，无法验证用户专属功能或角色权限。电商、SaaS、社交和其他应用中的核心流程都可能因此漏测。认证方案需要兼顾：
+没有认证支持时，Agent 只能访问公开页面，无法验证用户专属功能或角色权限。电商、SaaS、社交和其他应用中的核心流程都可能因此漏测。认证方案需要兼顾：
 
 1. 凭据的安全存储和读取。
 2. 登录页面与表单的自动识别。
@@ -24,7 +24,7 @@
 
 ~~~mermaid
 graph TD
-    A[测试代理] --> B[AuthenticationManager]
+    A[Web Audit Agent] --> B[AuthenticationManager]
     B --> C[CredentialProvider]
     B --> D[LoginFlowDetector]
     B --> E[LoginExecutor]
@@ -68,7 +68,7 @@ graph TD
 uv run python -m src.index
 ~~~
 
-测试不同权限时，应在目标应用中预先创建有相应权限的专用测试账户，再分别运行测试。仅改变代理的账户名称不会改变目标应用授予的角色。
+测试不同权限时，应在目标应用中预先创建有相应权限的专用测试账户，再分别运行测试。仅改变 Agent 的账户名称不会改变目标应用授予的角色。
 
 ## 原提案的实施阶段
 
@@ -76,7 +76,7 @@ uv run python -m src.index
 2. 实现登录检测、表单登录和结果验证。
 3. 保存与恢复 cookie、浏览器存储状态，并处理会话过期。
 4. 扩展 TOTP、OAuth、SSO 和复杂登录流程。
-5. 接入探索代理、单页代理、CLI 与 MCP 工具。
+5. 接入探索 Agent、单页 Agent、CLI 与 MCP 工具。
 
 阶段四中的扩展能力是原规划，当前支持情况应检查 `src/auth/`。
 

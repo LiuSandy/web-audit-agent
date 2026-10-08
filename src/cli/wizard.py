@@ -178,7 +178,7 @@ async def run_wizard() -> int:
     errors = []
     reason = "failed"
     try:
-        console.print("正在启动测试代理和浏览器……")
+        console.print("正在启动 Web Audit Agent 和浏览器……")
         async with aclosing(explore(agent, _make_guidance_menu(agent, options),
                                     max_steps=options.max_steps, max_failures=options.max_failures)) as steps:
             async for result in steps:

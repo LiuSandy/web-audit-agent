@@ -173,7 +173,7 @@ class SinglePageTestingAgent:
         inputs = [e for e in elements if e["tag"] in ("input", "textarea", "select")]
         buttons = [e for e in elements if e["tag"] in ("button", "a")]
         other = [e for e in elements if e["tag"] not in ("input", "textarea", "select", "button", "a")]
-        sys = "你是质量测试规划代理。请为单个网页生成测试计划，只返回有效 JSON，不要 Markdown。测试名称、描述、步骤说明和预期结果使用简体中文；JSON 字段名、枚举值、URL 和 CSS 选择器保持原值。"
+        sys = "你是质量测试规划 Agent。请为单个网页生成测试计划，只返回有效 JSON，不要 Markdown。测试名称、描述、步骤说明和预期结果使用简体中文；JSON 字段名、枚举值、URL 和 CSS 选择器保持原值。"
         element_lines = "\n".join(
             f"{i + 1}. [{e['tag'].upper()}] {e['selector']} (text: \"{e['text'][:40]}\", type: {e.get('type') or 'N/A'}, visible: {str(e['isVisible']).lower()})"
             for i, e in enumerate(elements[:30]))

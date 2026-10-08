@@ -134,7 +134,7 @@ def test_specific_issue(page):
 
     def extract_test_description(self, content):
         match = re.search(r'(?:async\s+)?def\s+test_\w+\s*\([^)]*\):\s*\n\s*[\"\']{3}(.+?)[\"\']{3}', content, re.DOTALL)
-        return match.group(1).strip() if match else "根据代理发现的问题生成的测试"
+        return match.group(1).strip() if match else "根据 Agent 发现的问题生成的测试"
 
     def determine_priority(self, category, test_type):
         if category in ("functional", "network-errors"):

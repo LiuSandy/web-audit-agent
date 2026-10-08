@@ -23,7 +23,7 @@ try:
 except PackageNotFoundError:
     __version__ = "0.1.0"
 
-app = typer.Typer(help="WebAudit —— 网站探索测试代理（无子命令时进入交互向导）")
+app = typer.Typer(help="WebAudit —— Web Audit Agent（无子命令时进入交互向导）")
 
 app.add_typer(config_app, name="config")
 app.command("paths")(paths_command)

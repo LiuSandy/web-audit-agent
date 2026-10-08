@@ -1,4 +1,4 @@
-# RFC：通过 MCP 接入网站测试代理
+# RFC：通过 MCP 接入 Web Audit Agent
 
 > 历史设计文档。当前服务的启动方式与已实现接口见 [MCP 服务说明](mcp-server.md)；本提案中的资源、提示词或流式能力未必已实现。
 
@@ -8,7 +8,7 @@
 
 ## 摘要
 
-原提案希望通过 Model Context Protocol（MCP）将探索代理与单页测试代理开放给 IDE 和 AI 助手。开发者可在工作环境中启动测试、查询进度、停止会话和读取报告，不必只依赖独立的交互式 CLI。
+原提案希望通过 Model Context Protocol（MCP）将探索 Agent与单页测试 Agent开放给 IDE 和 AI 助手。开发者可在工作环境中启动测试、查询进度、停止会话和读取报告，不必只依赖独立的交互式 CLI。
 
 ## 背景与目标
 
@@ -28,14 +28,14 @@ graph LR
     B --> C[探索测试工具]
     B --> D[单页测试工具]
     B --> E[状态与会话工具]
-    C --> F[探索代理]
-    D --> G[单页代理]
+    C --> F[探索 Agent]
+    D --> G[单页 Agent]
     E --> H[会话状态]
     B --> I[报告资源]
     I --> J[Markdown 报告]
 ~~~
 
-MCP 服务负责工具调用与资源读取；代理负责浏览器操作、模型规划和发现记录；SQLite 与报告文件保存状态及结果。工具返回稳定的 JSON 字段和值，并为面向用户的状态补充中文 `statusText` 或中文说明。
+MCP 服务负责工具调用与资源读取；Agent 负责浏览器操作、模型规划和发现记录；SQLite 与报告文件保存状态及结果。工具返回稳定的 JSON 字段和值，并为面向用户的状态补充中文 `statusText` 或中文说明。
 
 ## 工具设计
 
@@ -102,11 +102,11 @@ VS Code 等支持 MCP 的客户端可使用相应的 `command`、`args` 和 `cwd
 
 ## 权衡与后续问题
 
-MCP 提供统一的工具发现和 IDE/助手接入，但增加了协议层、客户端配置及错误处理成本。继续保留 CLI 可支持独立使用。需要进一步评估多客户端并发隔离、长任务进度通知、资源缓存策略和代理异常后的恢复。原提案比较了 REST、gRPC 和 WebSocket，最终选择 MCP 以便与 AI 客户端集成。
+MCP 提供统一的工具发现和 IDE/助手接入，但增加了协议层、客户端配置及错误处理成本。继续保留 CLI 可支持独立使用。需要进一步评估多客户端并发隔离、长任务进度通知、资源缓存策略和 Agent 异常后的恢复。原提案比较了 REST、gRPC 和 WebSocket，最终选择 MCP 以便与 AI 客户端集成。
 
 ## 参考
 
 - [当前 MCP 使用说明](mcp-server.md)
 - [当前 Python MCP 服务](../src/mcp/server.py)
 - [MCP 官方站点](https://modelcontextprotocol.io/)
-- [单页测试代理设计](rfc-single-page-testing-agent.md)
+- [单页测试 Agent设计](rfc-single-page-testing-agent.md)
