@@ -138,6 +138,8 @@ class ExploratoryAgent:
             maxSteps: 步数预算。仅作为 runConfig 快照随会话落库；真正的循环
                 预算由 explore(max_steps=...) 传入（见 runner.py）。
             maxFailures: 连续失败阈值。同上，仅快照。
+            maxPages: 预发现阶段最多访问的页面数（start() 直接消费，是真实
+                预算而非快照），默认 20；显式传 0 合法生效（跳过预爬）。
             enableTestGeneration: 是否在结束时从发现的问题生成测试；同时门控
                 下方全部 test* 参数，关闭时 TestGenerator/TestExecutor 均不实例化。
             testOutputDir: 生成测试落盘目录，缺省为运行产物目录下 generated-tests/。
@@ -166,6 +168,9 @@ class ExploratoryAgent:
         database = self.db.get_database()
         self.session_repo = SessionRepository(database)
         self.auth_manager = AuthenticationManager(database, {"storageType": "sqlite"})
+        # 会话状态整体随 save_state() 落库、start() 恢复。history 是行为日志
+        # （情景记忆）：每步追加动作/理由/页面/参数/结果，既作为提示词里的
+        # 短期记忆，也支撑停滞检测与断点恢复。
         self.state = {"visitedUrls": OrderedSet(), "findings": [], "steps": 0,
                       "history": [], "todoQueue": []}
         # test* 配置项属于 TestGenerator/TestExecutor 子系统，这里只做装配转发；
@@ -199,6 +204,8 @@ class ExploratoryAgent:
         saved_config = self.state.get("runConfig") or {}
         saved_url = self.state.get("baseUrl")
         if not saved_url:
+            # 兜底推断目标站点：baseUrl 缺失时，从已访问页面、行为日志与
+            # 问题记录里取第一个带主机的 URL 做一致性校验。
             urls = list(self.state.get("visitedUrls") or [])
             urls += [h.get("url") for h in self.state.get("history", []) if h.get("url")]
             urls += [f.get("url") for f in self.state.get("findings", []) if f.get("url")]
@@ -220,7 +227,7 @@ class ExploratoryAgent:
         self.state["runId"] = self.config["runId"]
         self.state["artifactDir"] = self.config["artifactDir"]
         self.state["runConfig"] = {key: self.config.get(key) for key in (
-            "maxSteps", "maxFailures", "enableTestGeneration", "testDryRun", "testParallelExecution",
+            "maxSteps", "maxFailures", "maxPages", "enableTestGeneration", "testDryRun", "testParallelExecution",
             "testMaxConcurrency", "testTimeout", "testRetryCount")}
         self.state["runConfig"]["authAppIdentifier"] = (self.config.get("auth") or {}).get("appIdentifier")
         self.state["visitedUrls"] = OrderedSet(self.state.get("visitedUrls") or [])
@@ -247,12 +254,15 @@ class ExploratoryAgent:
                 raise RuntimeError(f"登录失败：{auth_res.get('error')}")
         if self.state["steps"] == 0:
             logger.log("正在预先发现页面……")
-            discovered_urls = await crawl_site(self.page, self.config["baseUrl"])
+            # 用 get(默认值) 而非 `or`：显式传 0（跳过预爬）会生效保留。
+            discovered_urls = await crawl_site(self.page, self.config["baseUrl"],
+                                               max_pages=self.config.get("maxPages", 20))
             self.state["todoQueue"] = list(discovered_urls)
             logger.log(f"已将发现的 {len(discovered_urls)} 个页面加入待办队列")
             await self.page.goto(self.config["baseUrl"])
             logger.log(f"已访问 {self.config['baseUrl']}")
         else:
+            # 断点续测：回到行为日志最后一步所在的页面，而不是从首页重来。
             last_url = self.state["history"][-1].get("url") if self.state["history"] else None
             if last_url:
                 await self.page.goto(last_url)
@@ -307,6 +317,7 @@ class ExploratoryAgent:
                       "success": False, "completed": False}
         if result.get("action") == "error":
             result["success"] = False
+            # 失败步同样入行为日志：下一轮模型才能看到上一步为何失败。
             self.state["history"].append({"action": "error", "reason": result["reason"],
                                           "url": url, "success": False, "result": result.get("result", result["reason"])})
         self.save_state()
@@ -317,6 +328,8 @@ class ExploratoryAgent:
         title = await self.page.title()
         visited_list = list(self.state["visitedUrls"])
         snapshot = await self.page.evaluate(_SNAPSHOT_CALLBACK, visited_list)
+        # 短期记忆：把最近 3 步格式化后注入提示词——模型无状态，据此才知道
+        # 上一步做了什么、结果如何，才能连贯决策。
         history = self.state["history"]
         history_slice = history[-3:]
         history_start_index = max(0, len(history) - 3)
@@ -330,6 +343,8 @@ class ExploratoryAgent:
             .replace("${this.state.visitedUrls.size}", str(len(self.state["visitedUrls"])))
             .replace("${JSON.stringify(this.state.todoQueue)}", json.dumps(self.state["todoQueue"], separators=(",", ":")))
             .replace('${recentHistory || "None"}', recent_history or "None"))
+        # 反循环启发式：以下统计都从行为日志尾部回溯，命中时向提示词追加
+        # 警告，促使模型换页面或结束。
         steps_on_current_url = 0
         for history_step in reversed(history):
             if history_step and history_step["url"] == url:
@@ -386,6 +401,8 @@ class ExploratoryAgent:
         logger.log(f"Agent 决策：{parsed.get('reason')}")
         logger.log(f"执行操作：{parsed.get('action')}")
         action_result = await self.execute_action(parsed["action"], parsed.get("params"))
+        # 行为日志条目：action/reason 为本轮决策，url 为执行后的落点页面
+        # （停滞检测据此统计在同一页面的连续步数），其余为执行结果。
         self.state["history"].append({"action": parsed["action"], "reason": parsed["reason"],
                                       "url": self.page.url, "params": parsed.get("params"),
                                       **action_result})

@@ -96,6 +96,7 @@ def run_command(
     base_url: str = typer.Argument(..., help="目标网站起始地址"),
     max_steps: int | None = typer.Option(None, "--max-steps", min=1, help="本次运行的最大探索步数"),
     max_failures: int | None = typer.Option(None, "--max-failures", min=1, help="连续失败步数上限"),
+    max_pages: int | None = typer.Option(None, "--max-pages", min=1, help="预发现阶段最多访问的页面数"),
     autonomous: bool = typer.Option(True, "--autonomous/--guided", help="自主/引导模式（非交互下 guided 降级为自主）"),
     session_id: str | None = typer.Option(None, "--session-id", help="恢复指定会话"),
     verbose: bool = typer.Option(False, "--verbose", help="显示诊断层输出"),
@@ -114,7 +115,9 @@ def run_command(
     settings = get_runtime().settings["run"]
     max_steps = max_steps if max_steps is not None else settings.get("max_steps", 50)
     max_failures = max_failures if max_failures is not None else settings.get("max_failures", 3)
-    options = RunOptions(output_dir=str(output_dir) if output_dir else None, base_url=base_url, max_steps=max_steps, max_failures=max_failures, autonomous=autonomous,
+    max_pages = max_pages if max_pages is not None else settings.get("max_pages", 20)
+    options = RunOptions(output_dir=str(output_dir) if output_dir else None, base_url=base_url, max_steps=max_steps, max_failures=max_failures, max_pages=max_pages,
+                         autonomous=autonomous,
                          session_id=session_id, verbose=verbose, json_output=json_output,
                          auth_email=auth_email, auth_password=auth_password,
                          auth_app_identifier=auth_app_identifier,

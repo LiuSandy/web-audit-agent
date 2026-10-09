@@ -61,7 +61,8 @@ def init_config(
     if base_url:
         llm["base_url"] = base_url
     sections = {"llm": llm, "run": {"max_steps": runtime.settings["run"].get("max_steps", 50),
-                                      "max_failures": runtime.settings["run"].get("max_failures", 3)}}
+                                      "max_failures": runtime.settings["run"].get("max_failures", 3),
+                                      "max_pages": runtime.settings["run"].get("max_pages", 20)}}
     if runtime.settings["storage"]:
         sections["storage"] = runtime.settings["storage"]
     content = ""
@@ -84,7 +85,7 @@ def show_config(sources: bool = typer.Option(False, "--sources", help="显示每
     runtime = get_runtime()
     llm = runtime.settings["llm"]
     output = {"llm": {k: v for k, v in llm.items() if k in ("provider", "model", "base_url", "secret_storage")},
-              "run": {k: v for k, v in runtime.settings["run"].items() if k in ("max_steps", "max_failures")},
+              "run": {k: v for k, v in runtime.settings["run"].items() if k in ("max_steps", "max_failures", "max_pages")},
               "storage": {"data_dir": str(runtime.data)}}
     key, source = get_api_key(llm.get("provider", "openai"), runtime)
     output["llm"]["api_key"] = "已配置（隐藏）" if key else "未配置"

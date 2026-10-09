@@ -97,6 +97,7 @@ async def _collect_options() -> RunOptions:
     return RunOptions(base_url=base_url, autonomous=autonomous, verbose=verbose,
                       max_steps=get_runtime().settings["run"].get("max_steps", 50),
                       max_failures=get_runtime().settings["run"].get("max_failures", 3),
+                      max_pages=get_runtime().settings["run"].get("max_pages", 20),
                       session_id=session_id, generate_tests=generate_tests, test_mode=test_mode,
                       max_concurrency=max_concurrency, timeout_ms=timeout_ms, retry_count=retry_count,
                       auth_email=auth_email, auth_password=auth_password,

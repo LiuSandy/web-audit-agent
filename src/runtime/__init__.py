@@ -71,7 +71,8 @@ def resolve_runtime(home=None, data_dir=None, config_file=None, overrides=None, 
         for key in settings[section]:
             sources[f"{section}.{key}"] = str(config)
     env_fields = {"WEBAUDIT_PROVIDER": ("llm", "provider"), "WEBAUDIT_MODEL": ("llm", "model"),
-                  "WEBAUDIT_MAX_STEPS": ("run", "max_steps"), "WEBAUDIT_MAX_FAILURES": ("run", "max_failures")}
+                  "WEBAUDIT_MAX_STEPS": ("run", "max_steps"), "WEBAUDIT_MAX_FAILURES": ("run", "max_failures"),
+                  "WEBAUDIT_MAX_PAGES": ("run", "max_pages")}
     for env, (section, key) in env_fields.items():
         if os.environ.get(env):
             value = os.environ[env]
@@ -117,7 +118,7 @@ def resolve_runtime(home=None, data_dir=None, config_file=None, overrides=None, 
             raise ValueError(f"llm.{key} 必须是字符串")
     if settings["llm"].get("secret_storage") not in (None, "environment", "keyring", "file"):
         raise ValueError("llm.secret_storage 仅支持 environment / keyring / file")
-    for key in ("max_steps", "max_failures"):
+    for key in ("max_steps", "max_failures", "max_pages"):
         value = settings["run"].get(key)
         if value is not None and (type(value) is not int or value < 1):
             raise ValueError(f"run.{key} 必须是正整数")

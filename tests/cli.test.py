@@ -8,7 +8,7 @@ from rich.console import Console
 from typer.testing import CliRunner
 
 from src.cli.app import app
-from src.cli.core.config import RunOptions, build_config, new_session_id, validate_auth
+from src.cli.core.config import RunOptions, build_config, new_session_id, validate_auth, validate_options
 from src.cli.core.console import findings_table, friendly_hint, render_step
 from src.cli.core.runner import StopExploration, explore, finish_session
 from tests.fakes import FakeAgent, STEP_A, STEP_B
@@ -26,6 +26,7 @@ def test_build_config_camel_case_contract():
     config = build_config(RunOptions(base_url="https://example.com"))
     assert config["baseUrl"] == "https://example.com"
     assert config["maxSteps"] == 50
+    assert config["maxPages"] == 20
     assert config["auth"] is None
     assert config["enableTestGeneration"] is False
     assert config["testOutputDir"].endswith("/generated-tests")
@@ -46,6 +47,15 @@ def test_build_config_generates_session_id_when_absent():
     config = build_config(RunOptions(base_url="u"))
     assert config["sessionId"].startswith("session-")
     assert new_session_id().startswith("session-")
+
+
+def test_build_config_carries_max_pages():
+    assert build_config(RunOptions(base_url="u", max_pages=7))["maxPages"] == 7
+
+
+def test_validate_options_rejects_non_positive_max_pages():
+    assert validate_options(RunOptions(base_url="https://example.com", max_pages=0)) is not None
+    assert validate_options(RunOptions(base_url="https://example.com", max_pages=1)) is None
 
 
 def test_build_auth_password_only_gets_default_app_identifier():
@@ -398,6 +408,28 @@ def test_run_respects_max_steps(fake_run_env):
     payload = json_module.loads(result.stdout)
     assert payload["steps"] == 1
     assert payload["reportPath"] == "reports/fake.md"
+
+
+def test_run_passes_max_pages_to_agent(monkeypatch):
+    """--max-pages 经 build_config 进入 agent 配置，供 start() 预发现消费。"""
+    import src.cli.commands.run as run_module
+    from src.cli.core import runner as runner_module
+
+    captured = []
+    agent = FakeAgent()
+
+    def make_agent(config):
+        captured.append(config)
+        return agent
+
+    async def fake_report(*args, **kwargs):
+        return "reports/fake.md"
+
+    monkeypatch.setattr(run_module, "ExploratoryAgent", make_agent)
+    monkeypatch.setattr(runner_module, "generate_report", fake_report)
+    result = runner.invoke(app, ["run", "https://example.com", "--max-pages", "7", "--json"])
+    assert result.exit_code == 0
+    assert captured[0]["maxPages"] == 7
 
 
 def test_render_step_escapes_rich_markup_in_current_url():

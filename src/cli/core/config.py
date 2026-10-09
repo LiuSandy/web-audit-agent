@@ -13,6 +13,7 @@ class RunOptions:
     base_url: str = ""
     max_steps: int = 50
     max_failures: int = 3
+    max_pages: int = 20
     autonomous: bool = True
     session_id: str | None = None
     verbose: bool = False
@@ -57,6 +58,8 @@ def build_config(options: RunOptions) -> dict:
         # explore(max_steps=..., max_failures=...) 传入（见 runner.py）。
         "maxSteps": options.max_steps,
         "maxFailures": options.max_failures,
+        # maxPages 是真实预算：start() 预发现阶段直接消费（见 exploratory.py）。
+        "maxPages": options.max_pages,
         "sessionId": session_id,
         "auth": build_auth(options),
         "enableTestGeneration": options.generate_tests,
@@ -93,6 +96,7 @@ def validate_options(options: RunOptions) -> str | None:
     except ValueError:
         return "目标地址无效"
     for name, value in (("max-steps", options.max_steps), ("max-failures", options.max_failures),
+                        ("max-pages", options.max_pages),
                         ("max-concurrency", options.max_concurrency), ("timeout", options.timeout_ms)):
         if value < 1:
             return f"--{name} 必须为正整数"
