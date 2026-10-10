@@ -12,6 +12,14 @@ from src.runtime.secrets import get_api_key
 logger = create_logger("models")
 
 
+class _GeminiChatModel(ChatGoogleGenerativeAI):
+    """google-genai SDK 的自动函数调用（AFC）由 LangChain 接管，请求层固定关闭 AFC。"""
+
+    def _prepare_request(self, *args, **kwargs):
+        kwargs.setdefault("automatic_function_calling", {"disable": True})
+        return super()._prepare_request(*args, **kwargs)
+
+
 def create_gemini_model(config=None):
     config = config or {}
     api_key = config.get("apiKey") or os.environ.get("GOOGLE_AI_STUDIO_API_KEY")
@@ -25,7 +33,7 @@ def create_gemini_model(config=None):
                   "temperature": config.get("temperature", 0.7)}
         if config.get("maxTokens") is not None:
             kwargs["max_output_tokens"] = config["maxTokens"]
-        model = ChatGoogleGenerativeAI(**kwargs)
+        model = _GeminiChatModel(**kwargs)
         logger.success(f"Gemini 模型创建成功：{model_name}")
         return model
     except Exception as error:
