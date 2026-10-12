@@ -7,6 +7,7 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.prompts import PromptTemplate
 from langsmith import traceable
 from playwright.async_api import async_playwright
 
@@ -84,8 +85,13 @@ _SNAPSHOT_CALLBACK = r'''
 }
 '''
 
-_SYSTEM_PROMPT = r'''
-你是 Web Audit Agent。探索 ${this.config.baseUrl}，操作页面并发现问题。
+# 系统提示词模板：jinja2 渲染——字面单大括号免转义，变量值单趟注入、不被二次
+# 解析。jinja2 对缺变量静默渲染为空串，因此新增或改名占位符时必须同步两处：
+# _step 里的 format 调用与 tests/agents/exploratory-prompt.test.py 的变量钉死测试。
+# 另：jinja2 渲染默认丢弃模板结尾的单个换行（keep_trailing_newline=False），
+# 故模板文本以两个换行结尾补回一个——黄金测试锁定渲染结果与迁移前逐字节一致。
+_SYSTEM_PROMPT_TEMPLATE = PromptTemplate.from_template(r'''
+你是 Web Audit Agent。探索 {{baseUrl}}，操作页面并发现问题。
 请用简体中文填写所有面向用户的内容，包括 reason、record_finding 的 description；保留 JSON 字段名、动作名、问题类型、严重程度、URL 和 CSS 选择器的原值。
 
 目标：访问可发现页面，点击按钮、填写表单，尝试登录、购物等主要流程；检查功能、校验、图片、错误提示和体验问题。
@@ -93,13 +99,13 @@ _SYSTEM_PROMPT = r'''
 优先访问待办队列中的新页面，不要重复点击标记为 [VISITED] 的链接。尝试空表单、无效输入和边界值；避免在同一页面循环。
 
 当前状态：
-- 页面地址：${url}
-- 页面标题：${title}
-- 已访问页面数：${this.state.visitedUrls.size}
-- 待办队列：${JSON.stringify(this.state.todoQueue)}
+- 页面地址：{{url}}
+- 页面标题：{{title}}
+- 已访问页面数：{{visitedCount}}
+- 待办队列：{{todoQueueJson}}
 
 最近三步：
-${recentHistory || "None"}
+{{recentHistory}}
 
 可用动作：
 - navigate(url)：访问指定页面。
@@ -110,8 +116,22 @@ ${recentHistory || "None"}
 - record_finding(type, description, severity)：记录问题。type 使用 functional_bug、validation_error、ux_issue、bug 或 other；severity 使用 low、medium、high 或 critical；description 必须用中文。
 - finish()：待办队列为空、陷入循环或主要流程已充分测试时结束。
 
-只返回有效 JSON 对象，包含 action、params、reason；reason 必须用中文说明本步假设或目标。看到登录表单时尝试有效和无效凭据；有购物流程时尝试加入购物车并结账。每次点击或填表后观察结果，如有明确异常则记录。队列有新页面时优先使用 navigate。
-'''
+只返回一个 JSON 对象（不要 Markdown 代码块、不要解释文字），每个返回都必含 action 与 reason；params 按动作而定，无参数的动作传 {}：
+
+{"action": "click", "params": {"selector": "#login-submit"}, "reason": "提交登录表单，先用错误凭据观察校验反馈"}
+
+各动作的 params 结构：
+{"action": "navigate", "params": {"url": "https://example.com/pricing"}}
+{"action": "click", "params": {"selector": "#add-to-cart"}}
+{"action": "fill_form", "params": {"selector": "#username", "value": "demo-user"}}
+{"action": "add_to_queue", "params": {"urls": ["https://example.com/help"]}}
+{"action": "record_finding", "params": {"type": "functional_bug", "description": "点击结账按钮后无任何响应", "severity": "high"}}
+{"action": "find_broken_images", "params": {}}
+{"action": "finish", "params": {}}
+
+reason 必须用中文说明本步假设或目标。看到登录表单时尝试有效和无效凭据；有购物流程时尝试加入购物车并结账。每次点击或填表后观察结果，如有明确异常则记录。队列有新页面时优先使用 navigate。
+
+''', template_format="jinja2")
 
 
 class SessionTargetError(ValueError):
@@ -336,13 +356,11 @@ class ExploratoryAgent:
         recent_history = "\n".join(
             f"第 {history_start_index + i + 1} 步：{h['action']}（原因：{h['reason']}）→ 结果：{h.get('result') or '无'}"
             for i, h in enumerate(history_slice))
-        system_prompt = (_SYSTEM_PROMPT
-            .replace("${\n            this.config.baseUrl\n        }", self.config["baseUrl"])
-            .replace("${this.config.baseUrl}", self.config["baseUrl"])
-            .replace("${url}", url).replace("${title}", title)
-            .replace("${this.state.visitedUrls.size}", str(len(self.state["visitedUrls"])))
-            .replace("${JSON.stringify(this.state.todoQueue)}", json.dumps(self.state["todoQueue"], separators=(",", ":")))
-            .replace('${recentHistory || "None"}', recent_history or "None"))
+        system_prompt = _SYSTEM_PROMPT_TEMPLATE.format(
+            baseUrl=self.config["baseUrl"], url=url, title=title,
+            visitedCount=str(len(self.state["visitedUrls"])),
+            todoQueueJson=json.dumps(self.state["todoQueue"], separators=(",", ":")),
+            recentHistory=recent_history or "None")
         # 反循环启发式：以下统计都从行为日志尾部回溯，命中时向提示词追加
         # 警告，促使模型换页面或结束。
         steps_on_current_url = 0
