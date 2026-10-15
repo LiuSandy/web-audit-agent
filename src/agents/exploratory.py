@@ -35,6 +35,13 @@ def build_step_metadata(session_id, state, url):
     return {"sessionId": session_id or "", "step": state["steps"], "url": url,
             "visitedCount": len(state["visitedUrls"]), "queueLength": len(state["todoQueue"])}
 
+
+def describe_model_error(error: Exception, timeout_ms: int) -> str:
+    """模型调用异常的人类可读描述；空 str 异常（如 TimeoutError）退回类型名，绝不让错误消息隐形。"""
+    if isinstance(error, asyncio.TimeoutError):
+        return f"模型调用超时：等待模型响应超过 {timeout_ms}ms（服务端过载或网络异常的常见表现）"
+    return str(error) or type(error).__name__
+
 _SNAPSHOT_CALLBACK = r'''
 (visitedUrls) => {
   const elements = document.querySelectorAll("a, button, input, select, textarea, img, label");
@@ -404,9 +411,10 @@ class ExploratoryAgent:
                     logger.warn(f"触发模型请求限流，等待 {wait_time} 毫秒……")
                     await asyncio.sleep(wait_time / 1000)
                     continue
-                logger.error(f"模型调用失败（第 {attempt} 次尝试）：{error}")
+                detail = describe_model_error(error, timeout_ms)
+                logger.error(f"模型调用失败（第 {attempt} 次尝试）：{detail}")
                 if attempt == max_retries:
-                    return {"action": "error", "reason": f"模型调用失败：{error}", "completed": False}
+                    return {"action": "error", "reason": f"模型调用失败：{detail}", "completed": False}
         content = response.content if isinstance(response.content, str) else json.dumps(response.content)
         try:
             cleaned = content.replace("```json", "").replace("```", "").strip()
