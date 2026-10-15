@@ -8,7 +8,7 @@
 | # | 事项 | 优先级 | 状态 | 关键产出 |
 |---|------|--------|------|----------|
 | 1 | LangSmith 观测 | **P0** | ✅ 完成 | 每步 LLM 调用的 token/耗时/轨迹可视化 |
-| 5 | 量化实验 | **P0** | ☐ 未开始 | 检出率 / 误报率 / 步数 / token 成本四项核心数字 |
+| 5 | 量化实验 | **P0** | ◐ 基线已建 | 首轮四数字落表（检出 52.6%/误报 0%/步数 14.4/token 22.7k）；A/B 对比待下次改造复跑 |
 | 2 | SEO 审计工具 | P1 | ☐ 未开始 | `src/tools/seo-audit.py` + Agent 新动作 |
 | 3 | CLI 专业化 | **P0** | ✅ 完成 | 子命令 + flags + 非交互运行 + rich 输出 |
 | 4 | 可视化改造 | P3 | ☐ 未开始 | HTML 报告（图表 + 截图 + 页面访问图） |
@@ -121,11 +121,11 @@
 **目标**：建立可重复的基准评测：固定条件跑 N 次，产出**检出率、误报率、平均步数、单次会话 token 成本**四个核心数字；此后每项重大改造复跑一轮，形成「改造前后」对比。
 
 **任务**
-- [ ] 人工整理 demo 站（with-bugs.practicesoftwaretesting.com）已知 bug 清单作为 ground truth，存 `docs/benchmark-ground-truth.md`
-- [ ] 批量跑批脚本 `scripts/benchmark.py`：固定配置循环跑 N 次（同 maxSteps、同模型、独立会话），汇总每次的发现数、类型分布、步数、成败
-- [ ] 接入 #1 的 token / 耗时数据（LangSmith 未就绪时，先出检出率与稳定性两个维度）
-- [ ] 人工核对：findings 逐条标注「命中 ground truth / 真实但清单外 / 误报」
-- [ ] 结果文档 `docs/benchmark-results.md`：数据表 + 每个数字的出处与样本量说明
+- [x] 自建基准站（独立仓库 webaudit-bench，Vercel 部署）承载 ground truth，清单存 docs/benchmark-ground-truth.md（设计见 docs/superpowers/specs/2026-10-14-benchmark-site-design.md）
+- [x] 批量跑批脚本 `scripts/benchmark.py`：固定配置循环跑 N 次（同 maxSteps、同模型、独立会话），汇总每次的发现数、类型分布、步数、成败
+- [x] 接入 #1 的 token / 耗时数据（LangSmith 未就绪时，先出检出率与稳定性两个维度）
+- [x] 人工核对：findings 逐条标注「命中 ground truth / 真实但清单外 / 误报」（首轮 101 条已由 Claude 按口径逐条标注，全量标注在 annotations.csv 可复核）
+- [x] 结果文档 `docs/benchmark-results.md`：数据表 + 每个数字的出处与样本量说明
 - [ ] 固化流程：每完成一项 RoadMap 改造复跑一轮，结果文档追加「改造前后」对比列
 
 **验收**
@@ -164,3 +164,7 @@
 | 2026-09-30 | #3 CLI 专业化实现完成：typer 子命令 run/report/test/mcp + 向导重写（rich 渲染、共用 runner）+ 退出码契约 0/1/2/130 + --json 输出 + hatchling 打包（uv build 可装）。src/cli/run_tests.py 由 test 子命令替代；wrap_text 遮蔽内建问题随旧向导消解。ruff 通过，全量 103 项测试通过 |
 | 2026-10-02 | #3 异常路径与恢复契约补齐：保存失败传播、完整启动/清理生命周期、连续失败阈值、动作结果历史、结构化 JSON 结果、恢复目标及认证校验；新增失败边界与本地 Chromium CLI 集成验证；最终全量 152 项测试、Ruff 与 diff 检查通过。 |
 | 2026-10-03 | #3 增加统一配置与数据目录、config/paths/clean/uninstall、运行产物索引与报告附件导出；开发数据不迁移；最终全量 181 项测试、Ruff 和 diff 检查通过，wheel 在项目外通过本地模型及 Chromium 验证。详细规则见 docs/cli-storage.md。 |
+| 2026-10-14 | #5 ground truth 载体落成（本地）：独立仓库 webaudit-bench（Next.js 15）实现 6 页基准站，埋设 19 条已知 bug（自动 7 / 动作 2 / 认知 5 / 未检出 SEO+layout 5，另含干净对照页 about.html）；26 条 Playwright 机器验证全绿、生产构建通过；SEO 隔离四层（meta noindex + X-Robots-Tag + robots.txt Disallow + 零入链）已配置；lius-node 主站零改动。GitHub 提交、Vercel 部署与线上复验由用户另行执行（不在本计划范围） |
+| 2026-10-14 | #5 跑批脚本 scripts/benchmark.py 实现：subprocess 驱动 CLI（run --autonomous --json）独立会话循环跑批，按 --json 契约汇总每次步数/成败/时长与发现类型分布；token 用量从 LangSmith 按会话闭包聚合（纯逻辑单测覆盖，真实查询待首轮实跑验证，未接入时该项留空）；产出 runs.json / summary.json / annotations.csv（干净页 finding 按 ground truth 口径预标误报，其余留空待人工标注）。新增单测 13 项，全量 204 项测试通过；首轮 N=10 实跑待用户执行（消耗 LLM API key） |
+| 2026-10-15 | #5 首轮 N=10 实跑成功（deepseek-flash，产物 reports/benchmark/20261015T060659Z）：成功率 0.8（8 次 step_limit 达成 + 2 次中途「连续 3 步 JSON 无效」失败——即候选池结构化输出约束改造的 before 基线）；平均步数 14.4（σ 1.9）· 平均时长 60s · 平均发现 10.1 条/次（类型分布 network_error 46 / console_error 26 / validation_error 12 / broken_image 8 / bug 6 / functional_bug 2 / ux_issue 1）；单次 token 均值 22,659（prompt 18,915 / completion 3,744，LangSmith 闭包聚合首跑验证通过，N=8）；干净页 about.html 全程 0 发现（自动误报维度为 0）。首轮失败根因（#3 配置改造后 CLI 不读仓库 .env）已修：build_command 显式传 --env-file，单测 15 项通过。待人工标注 annotations.csv 后产出 docs/benchmark-results.md |
+| 2026-10-15 | #5 首轮标注与结果文档落成：101 条 finding 逐条对齐 ground truth（命中 99 / 真实但清单外 2 / 误报 0）。核心数字：bug 级检出率 10/19=52.6%，轮均检出 6.8/19=35.8%，误报率 0/101=0%，平均步数 14.4（σ1.9），单次 token 22,659（N=8）。自动通道 5 条加载即触发 bug 十轮全中（100%）；漏检主因是交互深度（cart 页 10/10 到访 0 交互）与 SEO/layout 工具缺位（5 条结构性漏检，#2 依据）；2/10 轮死于 JSON 解析失败（结构化输出改造 before 基线）。详见 docs/benchmark-results.md |
