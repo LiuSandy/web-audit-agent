@@ -177,6 +177,14 @@ _SYSTEM_PROMPT_TEMPLATE = PromptTemplate.from_template(r'''
 {"action": "find_broken_images", "params": {}}
 {"action": "finish", "params": {}}
 
+### 表单与交互探测 ###
+页面存在表单、输入框或操作按钮时，按以下清单逐项探测并观察反馈，不要只浏览不操作：
+1. 合法值提交：填入合理数据提交，记录成功或失败反馈。
+2. 边界值：数量类输入依次尝试 0、负数（如 -5）、非数字；文本类输入尝试空值与超长字符串。
+3. 重置、清空、删除类按钮：点击后核对数据是否真正变化。
+4. 任何提交类操作得到失败结果（如网络 5xx）后，必须再多观察一步页面反馈——操作失败且无任何提示，本身就是要记录的问题。
+用 record_finding 记录观察到的缺陷（type 取 functional_bug / validation_error / ux_issue），同一页面完成探测后再前往下一页。
+
 reason 必须用中文说明本步假设或目标。看到登录表单时尝试有效和无效凭据；有购物流程时尝试加入购物车并结账。每次点击或填表后观察结果，如有明确异常则记录。队列有新页面时优先使用 navigate。
 
 ''', template_format="jinja2")
