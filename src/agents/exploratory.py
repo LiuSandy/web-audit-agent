@@ -9,6 +9,7 @@ from urllib.parse import urljoin, urlparse
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.prompts import PromptTemplate
 from langsmith import traceable
+from langchain_openai import ChatOpenAI
 from playwright.async_api import async_playwright
 
 from src.auth.auth_manager import AuthenticationManager
@@ -41,6 +42,46 @@ def describe_model_error(error: Exception, timeout_ms: int) -> str:
     if isinstance(error, asyncio.TimeoutError):
         return f"模型调用超时：等待模型响应超过 {timeout_ms}ms（服务端过载或网络异常的常见表现）"
     return str(error) or type(error).__name__
+
+
+def parse_action_json(content: str) -> dict:
+    """从模型输出解析动作 JSON：剥围栏 → 整体解析 → 平衡花括号截取首个 JSON 对象。
+
+    失败抛 ValueError（json.JSONDecodeError 是其子类）。只保证返回 dict，
+    action/reason 字段校验留在调用方。
+    """
+    cleaned = content.replace("```json", "").replace("```", "").strip()
+    try:
+        parsed = json.loads(cleaned)
+    except json.JSONDecodeError:
+        start = cleaned.find("{")
+        if start < 0:
+            raise ValueError("输出中没有 JSON 对象") from None
+        depth = 0
+        for i in range(start, len(cleaned)):
+            if cleaned[i] == "{":
+                depth += 1
+            elif cleaned[i] == "}":
+                depth -= 1
+                if depth == 0:
+                    parsed = json.loads(cleaned[start:i + 1])
+                    break
+        else:
+            raise ValueError("JSON 对象未闭合") from None
+    if not isinstance(parsed, dict):
+        raise ValueError("解析结果不是 JSON 对象")
+    return parsed
+
+
+def _bind_json_mode(model):
+    """决策调用绑定 JSON mode。端点探针实测（2026-10-15）：json_schema 与强制
+    tool_choice 均 400，json_object 是该端点结构化输出的上限；非 ChatOpenAI
+    模型（gemini 路径）不受此约束。DeepSeek json_object 要求提示词含 "json"
+    字样，系统提示的 JSON 示例段已满足。"""
+    if isinstance(model, ChatOpenAI):
+        return model.bind(response_format={"type": "json_object"})
+    return model
+
 
 _SNAPSHOT_CALLBACK = r'''
 (visitedUrls) => {
@@ -191,6 +232,10 @@ class ExploratoryAgent:
         self.config.setdefault("testOutputDir", str(get_runtime().run_dir(self.config.get("sessionId") or "anonymous", self.config["runId"]) / "generated-tests"))
         config = self.config
         self.model = config.get("model") or get_default_model()
+        # 决策调用专用实例：OpenAI 兼容端点绑 JSON mode（探针实测 json_schema 与
+        # 强制 tool_choice 均 400，json_object 是上限）。TestGenerator（:203）等
+        # 消费者继续用原始 self.model，不受 JSON 输出约束。
+        self.decision_model = _bind_json_mode(self.model)
         self.db = AppDatabase.get_instance()
         database = self.db.get_database()
         self.session_repo = SessionRepository(database)
@@ -400,7 +445,7 @@ class ExploratoryAgent:
         response = None
         for attempt in range(1, max_retries + 1):
             try:
-                response = await asyncio.wait_for(self.model.ainvoke([
+                response = await asyncio.wait_for(self.decision_model.ainvoke([
                     SystemMessage(content=system_prompt), HumanMessage(content=user_message)]),
                     timeout=timeout_ms / 1000)
                 break
@@ -417,12 +462,14 @@ class ExploratoryAgent:
                     return {"action": "error", "reason": f"模型调用失败：{detail}", "completed": False}
         content = response.content if isinstance(response.content, str) else json.dumps(response.content)
         try:
-            cleaned = content.replace("```json", "").replace("```", "").strip()
-            parsed = json.loads(cleaned)
-        except Exception:
-            logger.error("无法解析模型响应", content)
-            return {"action": "error", "reason": "模型返回的 JSON 无效", "completed": False}
-        if not isinstance(parsed, dict) or not isinstance(parsed.get("action"), str) or not isinstance(parsed.get("reason"), str):
+            parsed = parse_action_json(content)
+        except ValueError as parse_error:
+            repaired = await self._repair_action_json(content, str(parse_error))
+            if repaired is None:
+                logger.error("无法解析模型响应", content)
+                return {"action": "error", "reason": "模型返回的 JSON 无效", "completed": False}
+            parsed = repaired
+        if not isinstance(parsed.get("action"), str) or not isinstance(parsed.get("reason"), str):
             return {"action": "error", "reason": "模型响应缺少有效 action/reason", "completed": False, "success": False}
         logger.log(f"Agent 决策：{parsed.get('reason')}")
         logger.log(f"执行操作：{parsed.get('action')}")
@@ -436,6 +483,26 @@ class ExploratoryAgent:
                  "visitedCount": len(self.state["visitedUrls"]), "findingsCount": len(self.state["findings"])}
         return {"action": parsed["action"], "reason": parsed["reason"],
                 "completed": parsed["action"] == "finish" and action_result["success"], "stats": stats, **action_result}
+
+    @traceable(name="repair_action_json", run_type="chain")
+    async def _repair_action_json(self, content: str, parse_error: str) -> dict | None:
+        """解析失败时把原始输出与错误喂回模型修复一次；修复失败返回 None（调用方走原错误路径）。"""
+        repair_prompt = (
+            "你的上一条回复无法解析为动作 JSON。\n"
+            f"解析错误：{parse_error}\n"
+            f"原始输出：\n{content[:4000]}\n"
+            "只返回修正后的一个 JSON 对象，必含 action 与 reason 字段，不要任何解释文字。"
+        )
+        try:
+            fix = await asyncio.wait_for(
+                self.decision_model.ainvoke([HumanMessage(content=repair_prompt)]), timeout=30)
+        except Exception:
+            return None
+        fix_content = fix.content if isinstance(fix.content, str) else json.dumps(fix.content)
+        try:
+            return parse_action_json(fix_content)
+        except ValueError:
+            return None
 
     @traceable(name="execute_action", run_type="tool")
     async def execute_action(self, action, params):

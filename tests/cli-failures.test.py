@@ -199,6 +199,7 @@ def bare_agent():
 @pytest.mark.asyncio
 async def test_invalid_model_response_is_saved_in_history(bare_agent):
     bare_agent.model = SimpleNamespace(ainvoke=AsyncMock(return_value=SimpleNamespace(content="not JSON")))
+    bare_agent.decision_model = bare_agent.model
     result = await bare_agent.step()
     assert result["success"] is False
     assert bare_agent.state["history"][-1]["success"] is False
@@ -209,6 +210,7 @@ async def test_invalid_model_response_is_saved_in_history(bare_agent):
 async def test_action_failure_reaches_next_model_prompt(bare_agent):
     bare_agent.model = SimpleNamespace(ainvoke=AsyncMock(return_value=SimpleNamespace(
         content=json.dumps({"action": "click", "reason": "checkout", "params": "#missing"}))))
+    bare_agent.decision_model = bare_agent.model
     bare_agent.page.click = AsyncMock(side_effect=RuntimeError("element missing"))
     bare_agent.perform_automatic_bug_scanning = AsyncMock()
     result = await bare_agent.step()
@@ -223,6 +225,7 @@ async def test_action_failure_reaches_next_model_prompt(bare_agent):
 async def test_step_save_failure_propagates(bare_agent):
     bare_agent.model = SimpleNamespace(ainvoke=AsyncMock(return_value=SimpleNamespace(
         content=json.dumps({"action": "finish", "reason": "done"}))))
+    bare_agent.decision_model = bare_agent.model
     bare_agent.session_repo.save_state.side_effect = RuntimeError("database full")
     with pytest.raises(RuntimeError, match="database full"):
         await bare_agent.step()
