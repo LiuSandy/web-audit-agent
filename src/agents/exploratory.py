@@ -447,7 +447,7 @@ class ExploratoryAgent:
             system_prompt += "\n\n### 待办队列为空 ###\n可发现页面已经探索完毕。除非当前页面还有明确的测试目标，否则下一步调用 finish()。"
         if guidance:
             system_prompt += f'\n\n### 用户指导 ###\n请优先遵循："{guidance}"'
-        user_message = f"\n当前页面元素（简化）：\n{json.dumps(snapshot, indent=2, ensure_ascii=False)}\n\n下一步做什么？只返回原始 JSON 对象。\n    "
+        user_message = f"\n当前页面元素（简化）：\n{json.dumps(snapshot, indent=2, ensure_ascii=False)}\n\n下一步做什么？只返回原始 json 对象。\n    "
         timeout_ms = 30000
         max_retries = 3
         response = None
@@ -499,17 +499,19 @@ class ExploratoryAgent:
             "你的上一条回复无法解析为动作 JSON。\n"
             f"解析错误：{parse_error}\n"
             f"原始输出：\n{content[:4000]}\n"
-            "只返回修正后的一个 JSON 对象，必含 action 与 reason 字段，不要任何解释文字。"
+            "只返回修正后的一个 json 对象，必含 action 与 reason 字段，不要任何解释文字。"
         )
         try:
             fix = await asyncio.wait_for(
                 self.decision_model.ainvoke([HumanMessage(content=repair_prompt)]), timeout=30)
-        except Exception:
+        except Exception as error:
+            logger.warn(f"修复调用失败：{describe_model_error(error, 30000)}")
             return None
         fix_content = fix.content if isinstance(fix.content, str) else json.dumps(fix.content)
         try:
             return parse_action_json(fix_content)
-        except ValueError:
+        except ValueError as error:
+            logger.warn(f"修复输出仍无法解析：{error}")
             return None
 
     @traceable(name="execute_action", run_type="tool")
